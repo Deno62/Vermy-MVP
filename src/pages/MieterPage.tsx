@@ -15,19 +15,19 @@ const MieterPage = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const immobilienData = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+  const loadData = async () => {
+    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
     setImmobilien(immobilienData);
     
-    let mieterData = LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
+    let mieterData = await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
     
     // Generate mock data if empty
     if (mieterData.length === 0 && immobilienData.length > 0) {
       const mockData = generateMockMieter(immobilienData, 12);
-      mockData.forEach(mieter => {
-        LocalStorage.save(STORAGE_KEYS.MIETER, mieter);
-      });
-      mieterData = LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
+      for (const mieter of mockData) {
+        await LocalStorage.save(STORAGE_KEYS.MIETER, mieter);
+      }
+      mieterData = await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
     }
     
     setMieter(mieterData);
@@ -42,9 +42,9 @@ const MieterPage = () => {
     console.log('Edit Mieter:', mieter);
   };
 
-  const handleDelete = (mieter: Mieter) => {
+  const handleDelete = async (mieter: Mieter) => {
     if (confirm(`Möchten Sie den Mieter "${mieter.vorname} ${mieter.nachname}" wirklich löschen?`)) {
-      LocalStorage.delete(STORAGE_KEYS.MIETER, mieter.id);
+      await LocalStorage.delete(STORAGE_KEYS.MIETER, mieter.id);
       loadData();
     }
   };

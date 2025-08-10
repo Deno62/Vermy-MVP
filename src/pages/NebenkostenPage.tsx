@@ -14,11 +14,11 @@ const NebenkostenPage = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const immobilienData = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+  const loadData = async () => {
+    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
     setImmobilien(immobilienData);
     
-    const nebenkostenData = LocalStorage.getAll<Nebenkosten>(STORAGE_KEYS.NEBENKOSTEN);
+    const nebenkostenData = await LocalStorage.getAll<Nebenkosten>(STORAGE_KEYS.NEBENKOSTEN);
     setNebenkosten(nebenkostenData);
     setLoading(false);
   };
@@ -31,9 +31,9 @@ const NebenkostenPage = () => {
     console.log('Edit Nebenkosten:', item);
   };
 
-  const handleDelete = (item: Nebenkosten) => {
+  const handleDelete = async (item: Nebenkosten) => {
     if (confirm(`Möchten Sie die Nebenkostenabrechnung für ${item.jahr} wirklich löschen?`)) {
-      LocalStorage.delete(STORAGE_KEYS.NEBENKOSTEN, item.id);
+      await LocalStorage.delete(STORAGE_KEYS.NEBENKOSTEN, item.id);
       loadData();
     }
   };

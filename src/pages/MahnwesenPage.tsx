@@ -15,10 +15,10 @@ const MahnwesenPage = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const immobilienData = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
-    const mieterData = LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
-    const mahnungenData = LocalStorage.getAll<Mahnwesen>(STORAGE_KEYS.MAHNWESEN);
+  const loadData = async () => {
+    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+    const mieterData = await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
+    const mahnungenData = await LocalStorage.getAll<Mahnwesen>(STORAGE_KEYS.MAHNWESEN);
     
     setImmobilien(immobilienData);
     setMieter(mieterData);
@@ -34,9 +34,9 @@ const MahnwesenPage = () => {
     console.log('Edit Mahnung:', item);
   };
 
-  const handleDelete = (item: Mahnwesen) => {
+  const handleDelete = async (item: Mahnwesen) => {
     if (confirm('Möchten Sie diese Mahnung wirklich löschen?')) {
-      LocalStorage.delete(STORAGE_KEYS.MAHNWESEN, item.id);
+      await LocalStorage.delete(STORAGE_KEYS.MAHNWESEN, item.id);
       loadData();
     }
   };

@@ -15,10 +15,10 @@ const DokumentePage = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const immobilienData = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
-    const mieterData = LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
-    const dokumenteData = LocalStorage.getAll<Dokument>(STORAGE_KEYS.DOKUMENTE);
+  const loadData = async () => {
+    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+    const mieterData = await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
+    const dokumenteData = await LocalStorage.getAll<Dokument>(STORAGE_KEYS.DOKUMENTE);
     
     setImmobilien(immobilienData);
     setMieter(mieterData);
@@ -34,9 +34,9 @@ const DokumentePage = () => {
     console.log('Edit Dokument:', item);
   };
 
-  const handleDelete = (item: Dokument) => {
+  const handleDelete = async (item: Dokument) => {
     if (confirm(`Möchten Sie das Dokument "${item.titel}" wirklich löschen?`)) {
-      LocalStorage.delete(STORAGE_KEYS.DOKUMENTE, item.id);
+      await LocalStorage.delete(STORAGE_KEYS.DOKUMENTE, item.id);
       loadData();
     }
   };
@@ -84,15 +84,15 @@ const DokumentePage = () => {
     
     switch (extension) {
       case 'pdf':
-        return <FileText className={`${iconClass} text-red-500`} />;
+        return <FileText className={iconClass} />;
       case 'doc':
       case 'docx':
-        return <FileText className={`${iconClass} text-blue-500`} />;
+        return <FileText className={iconClass} />;
       case 'jpg':
       case 'jpeg':
       case 'png':
       case 'gif':
-        return <FileText className={`${iconClass} text-green-500`} />;
+        return <FileText className={iconClass} />;
       default:
         return <FileText className={iconClass} />;
     }

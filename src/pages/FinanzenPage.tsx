@@ -16,21 +16,21 @@ const FinanzenPage = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const immobilienData = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
-    const mieterData = LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
+  const loadData = async () => {
+    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+    const mieterData = await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
     setImmobilien(immobilienData);
     setMieter(mieterData);
     
-    let buchungenData = LocalStorage.getAll<Finanzbuchung>(STORAGE_KEYS.FINANZBUCHUNGEN);
+    let buchungenData = await LocalStorage.getAll<Finanzbuchung>(STORAGE_KEYS.FINANZBUCHUNGEN);
     
     // Generate mock data if empty
     if (buchungenData.length === 0 && immobilienData.length > 0) {
       const mockData = generateMockFinanzbuchungen(immobilienData, mieterData, 30);
-      mockData.forEach(buchung => {
-        LocalStorage.save(STORAGE_KEYS.FINANZBUCHUNGEN, buchung);
-      });
-      buchungenData = LocalStorage.getAll<Finanzbuchung>(STORAGE_KEYS.FINANZBUCHUNGEN);
+      for (const buchung of mockData) {
+        await LocalStorage.save(STORAGE_KEYS.FINANZBUCHUNGEN, buchung);
+      }
+      buchungenData = await LocalStorage.getAll<Finanzbuchung>(STORAGE_KEYS.FINANZBUCHUNGEN);
     }
     
     setBuchungen(buchungenData);
@@ -45,9 +45,9 @@ const FinanzenPage = () => {
     console.log('Edit Finanzbuchung:', buchung);
   };
 
-  const handleDelete = (buchung: Finanzbuchung) => {
+  const handleDelete = async (buchung: Finanzbuchung) => {
     if (confirm(`Möchten Sie die Buchung "${buchung.beschreibung}" wirklich löschen?`)) {
-      LocalStorage.delete(STORAGE_KEYS.FINANZBUCHUNGEN, buchung.id);
+      await LocalStorage.delete(STORAGE_KEYS.FINANZBUCHUNGEN, buchung.id);
       loadData();
     }
   };
@@ -149,7 +149,7 @@ const FinanzenPage = () => {
       sortable: true,
       render: (value: number, row: Finanzbuchung) => (
         <span className={`font-medium ${
-          row.kategorie === 'Einnahme' ? 'text-green-600' : 'text-red-600'
+          row.kategorie === 'Einnahme' ? 'text-success-foreground' : 'text-destructive-foreground'
         }`}>
           {row.kategorie === 'Einnahme' ? '+' : '-'}{formatCurrency(value)}
         </span>
@@ -176,15 +176,15 @@ const FinanzenPage = () => {
         <div className="flex items-center space-x-6">
           <div className="text-center">
             <div className="text-sm text-muted-foreground">Einnahmen</div>
-            <div className="text-lg font-bold text-green-600">{formatCurrency(einnahmen)}</div>
+            <div className="text-lg font-bold text-success-foreground">{formatCurrency(einnahmen)}</div>
           </div>
           <div className="text-center">
             <div className="text-sm text-muted-foreground">Ausgaben</div>
-            <div className="text-lg font-bold text-red-600">{formatCurrency(ausgaben)}</div>
+            <div className="text-lg font-bold text-destructive-foreground">{formatCurrency(ausgaben)}</div>
           </div>
           <div className="text-center">
             <div className="text-sm text-muted-foreground">Saldo</div>
-            <div className={`text-lg font-bold ${einnahmen - ausgaben >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`text-lg font-bold ${einnahmen - ausgaben >= 0 ? 'text-success-foreground' : 'text-destructive-foreground'}`}>
               {formatCurrency(einnahmen - ausgaben)}
             </div>
           </div>

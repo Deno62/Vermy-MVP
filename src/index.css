@@ -16,20 +16,14 @@
     --popover: 0 0% 100%;
     --popover-foreground: 224 15% 15%;
 
-    /* Primary - Professional German blue */
-    --primary: 213 94% 35%;
+    /* Primary brand colors (Vermy) */
+    --primary: 207 77% 22%; /* #0D3B66 */
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 213 94% 30%;
+    --primary-hover: 207 77% 18%;
 
-    /* Secondary - Light professional gray */
-    --secondary: 220 13% 95%;
-    --secondary-foreground: 224 15% 25%;
-
-    --muted: 220 13% 95%;
-    --muted-foreground: 220 9% 46%;
-
-    --accent: 213 94% 92%;
-    --accent-foreground: 213 94% 25%;
+    /* Accent brand color */
+    --accent: 12 95% 60%; /* #F95738 */
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;

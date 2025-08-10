@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import logo from '@/assets/vermy-logo.png';
 
 const navigationItems = [
   {
@@ -80,7 +81,7 @@ export default function VermySidebar({ collapsed, onToggle }: VermySidebarProps)
       <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
         {!collapsed && (
           <div className="flex items-center space-x-2">
-            <Building2 className="h-8 w-8 text-primary" />
+            <img src={logo} alt="Vermy Logo – Haus Icon" className="h-8 w-8" />
             <div>
               <h1 className="text-xl font-bold text-crm-sidebar-foreground">Vermy</h1>
               <p className="text-xs text-crm-sidebar-foreground/70">Immobilien CRM</p>

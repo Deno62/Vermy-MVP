@@ -91,16 +91,34 @@ export interface Mahnwesen extends BaseEntity {
   notizen?: string;
 }
 
+export interface Vertrag extends BaseEntity {
+  mietvertrags_id: string;
+  immobilie_id: string;
+  mieter_id: string;
+  mietbeginn: Date;
+  mietende?: Date;
+  kaltmiete: number;
+  nebenkosten: number;
+  zahlungsintervall: 'monatlich' | 'quartalsweise';
+  kuendigungsfrist: string; // e.g., "3 Monate"
+  status: 'aktiv' | 'gekündigt' | 'abgelaufen';
+  dokument_id?: string;
+  notizen?: string;
+}
+
 export interface Dokument extends BaseEntity {
   immobilie_id?: string;
   mieter_id?: string;
+  vertrag_id?: string;
   titel: string;
   kategorie: 'Mietvertrag' | 'Kündigung' | 'Nebenkostenabrechnung' | 'Rechnung' | 'Foto' | 'Sonstiges';
   dateiname: string;
   dateipfad: string;
   dateigröße: number;
+  content_base64?: string; // MVP: lokale Speicherung im Browser/IndexedDB
   notizen?: string;
 }
+
 
 // Picklist values for better data quality
 export const PICKLISTS = {
@@ -117,5 +135,7 @@ export const PICKLISTS = {
   wartung_status: ['Gemeldet', 'In Bearbeitung', 'Erledigt', 'Verschoben'] as const,
   mahnstufe: [1, 2, 3] as const,
   mahn_status: ['Verschickt', 'Bezahlt', 'Ignoriert', 'Rechtlich'] as const,
-  dokument_kategorie: ['Mietvertrag', 'Kündigung', 'Nebenkostenabrechnung', 'Rechnung', 'Foto', 'Sonstiges'] as const
+  dokument_kategorie: ['Mietvertrag', 'Kündigung', 'Nebenkostenabrechnung', 'Rechnung', 'Foto', 'Sonstiges'] as const,
+  vertrag_status: ['aktiv', 'gekündigt', 'abgelaufen'] as const,
+  zahlungsintervall: ['monatlich', 'quartalsweise'] as const,
 } as const;

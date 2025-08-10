@@ -14,16 +14,16 @@ const ImmobilienPage = () => {
     loadImmobilien();
   }, []);
 
-  const loadImmobilien = () => {
-    let data = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+  const loadImmobilien = async () => {
+    let data = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
     
     // Generate mock data if empty
     if (data.length === 0) {
       const mockData = generateMockImmobilien(8);
-      mockData.forEach(immobilie => {
-        LocalStorage.save(STORAGE_KEYS.IMMOBILIEN, immobilie);
-      });
-      data = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+      for (const immobilie of mockData) {
+        await LocalStorage.save(STORAGE_KEYS.IMMOBILIEN, immobilie);
+      }
+      data = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
     }
     
     setImmobilien(data);

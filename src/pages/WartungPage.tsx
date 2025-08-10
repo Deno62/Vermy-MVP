@@ -14,11 +14,11 @@ const WartungPage = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const immobilienData = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+  const loadData = async () => {
+    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
     setImmobilien(immobilienData);
     
-    const wartungenData = LocalStorage.getAll<WartungMaengel>(STORAGE_KEYS.WARTUNG_MAENGEL);
+    const wartungenData = await LocalStorage.getAll<WartungMaengel>(STORAGE_KEYS.WARTUNG_MAENGEL);
     setWartungen(wartungenData);
     setLoading(false);
   };
@@ -31,9 +31,9 @@ const WartungPage = () => {
     console.log('Edit Wartung:', item);
   };
 
-  const handleDelete = (item: WartungMaengel) => {
+  const handleDelete = async (item: WartungMaengel) => {
     if (confirm(`Möchten Sie den Eintrag "${item.titel}" wirklich löschen?`)) {
-      LocalStorage.delete(STORAGE_KEYS.WARTUNG_MAENGEL, item.id);
+      await LocalStorage.delete(STORAGE_KEYS.WARTUNG_MAENGEL, item.id);
       loadData();
     }
   };

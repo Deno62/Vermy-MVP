@@ -18,26 +18,25 @@ const DashboardPage = () => {
     loadDashboardData();
   }, []);
 
-  const loadDashboardData = () => {
+  const loadDashboardData = async () => {
     // Check if we have any data, if not generate mock data
-    const immobilien = LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
+    const immobilien = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
     
     if (immobilien.length === 0) {
       // Generate and save mock data
       const mockData = generateMockData();
-      
-      mockData.immobilien.forEach(item => LocalStorage.save(STORAGE_KEYS.IMMOBILIEN, item));
-      mockData.mieter.forEach(item => LocalStorage.save(STORAGE_KEYS.MIETER, item));
-      mockData.finanzbuchungen.forEach(item => LocalStorage.save(STORAGE_KEYS.FINANZBUCHUNGEN, item));
-      mockData.wartungMaengel.forEach(item => LocalStorage.save(STORAGE_KEYS.WARTUNG_MAENGEL, item));
+      for (const item of mockData.immobilien) await LocalStorage.save(STORAGE_KEYS.IMMOBILIEN, item);
+      for (const item of mockData.mieter) await LocalStorage.save(STORAGE_KEYS.MIETER, item);
+      for (const item of mockData.finanzbuchungen) await LocalStorage.save(STORAGE_KEYS.FINANZBUCHUNGEN, item);
+      for (const item of mockData.wartungMaengel) await LocalStorage.save(STORAGE_KEYS.WARTUNG_MAENGEL, item);
     }
 
     // Load all data
     setData({
-      immobilien: LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN),
-      mieter: LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER),
-      finanzbuchungen: LocalStorage.getAll<Finanzbuchung>(STORAGE_KEYS.FINANZBUCHUNGEN),
-      wartungen: LocalStorage.getAll<WartungMaengel>(STORAGE_KEYS.WARTUNG_MAENGEL)
+      immobilien: await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN),
+      mieter: await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER),
+      finanzbuchungen: await LocalStorage.getAll<Finanzbuchung>(STORAGE_KEYS.FINANZBUCHUNGEN),
+      wartungen: await LocalStorage.getAll<WartungMaengel>(STORAGE_KEYS.WARTUNG_MAENGEL)
     });
   };
 
@@ -158,7 +157,7 @@ const DashboardPage = () => {
                     </div>
                   </div>
                   <div className={`font-medium ${
-                    transaction.kategorie === 'Einnahme' ? 'text-green-600' : 'text-red-600'
+                    transaction.kategorie === 'Einnahme' ? 'text-success-foreground' : 'text-destructive-foreground'
                   }`}>
                     {transaction.kategorie === 'Einnahme' ? '+' : '-'}{formatCurrency(transaction.betrag)}
                   </div>
