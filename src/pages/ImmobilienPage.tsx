@@ -26,7 +26,7 @@ const ImmobilienPage = () => {
       data = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
     }
     
-    setImmobilien(data);
+    setImmobilien(Array.isArray(data) ? data : []);
     setLoading(false);
   };
 
@@ -143,7 +143,7 @@ const ImmobilienPage = () => {
           </div>
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Users className="h-4 w-4" />
-            <span>{immobilien.filter(i => i.status === 'Vermietet').length} vermietet</span>
+            <span>{(Array.isArray(immobilien) ? immobilien.filter(i => i.status === 'Vermietet') : []).length} vermietet</span>
           </div>
         </div>
       </div>
@@ -151,7 +151,7 @@ const ImmobilienPage = () => {
       {/* Data Table */}
       <DataTable
         title="Alle Immobilien"
-        data={immobilien}
+        data={Array.isArray(immobilien) ? immobilien : []}
         columns={columns}
         searchKeys={['bezeichnung', 'adresse', 'ort', 'status']}
         onAdd={handleAdd}
