@@ -1,207 +1,240 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { vermyDb } from '@/db/vermyDb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Users, Euro, AlertTriangle, TrendingUp, Calendar } from 'lucide-react';
-import { Immobilie, Mieter, Finanzbuchung, WartungMaengel } from '@/types/entities';
-import { LocalStorage, STORAGE_KEYS } from '@/utils/storage';
-import { generateMockData } from '@/utils/mockData';
+import { Euro, AlertTriangle, Calendar, Wrench } from 'lucide-react';
+import type { Finanzbuchung, Vertrag, WartungMaengel } from '@/types/entities';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts';
 
 const DashboardPage = () => {
-  const [data, setData] = useState({
-    immobilien: [] as Immobilie[],
-    mieter: [] as Mieter[],
-    finanzbuchungen: [] as Finanzbuchung[],
-    wartungen: [] as WartungMaengel[]
-  });
+  // Live data from Dexie (auto-updates when tables change)
+  const finanzbuchungen = useLiveQuery(() => vermyDb.finanzbuchungen.toArray(), [], []) as Finanzbuchung[];
+  const vertraege = useLiveQuery(() => vermyDb.vertraege.toArray(), [], []) as Vertrag[];
+  const wartungen = useLiveQuery(() => vermyDb.wartungMaengel.toArray(), [], []) as WartungMaengel[];
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const loadDashboardData = async () => {
-    // Check if we have any data, if not generate mock data
-    const immobilien = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
-    
-    if (immobilien.length === 0) {
-      // Generate and save mock data
-      const mockData = generateMockData();
-      for (const item of mockData.immobilien) await LocalStorage.save(STORAGE_KEYS.IMMOBILIEN, item);
-      for (const item of mockData.mieter) await LocalStorage.save(STORAGE_KEYS.MIETER, item);
-      for (const item of mockData.finanzbuchungen) await LocalStorage.save(STORAGE_KEYS.FINANZBUCHUNGEN, item);
-      for (const item of mockData.wartungMaengel) await LocalStorage.save(STORAGE_KEYS.WARTUNG_MAENGEL, item);
+  const fmtCurrency = (n: number) =>
+    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmtDate = (d: Date | string | number) => new Date(d).toLocaleDateString('de-DE');
+
+  // KPI computations
+  const {
+    sollEinnahmen,
+    istEinnahmen,
+    ueberfaelligeAnzahl,
+    ueberfaelligerBetrag,
+    auslaufendeVertraege,
+    offeneWartungen,
+  } = useMemo(() => {
+    // Soll: Summe monatliche Miete (inkl. NK) aus aktiven Verträgen
+    const soll = (vertraege || [])
+      .filter((v) => v.status === 'aktiv')
+      .reduce((sum, v) => {
+        const monat = (v.kaltmiete || 0) + (v.nebenkosten || 0);
+        // bei quartalsweise auf Monatswert umlegen
+        const faktor = v.zahlungsintervall === 'quartalsweise' ? 1 / 3 : 1;
+        return sum + monat * faktor;
+      }, 0);
+
+    // Ist: Summe bezahlter Mietzahlungen im aktuellen Monat
+    const ist = (finanzbuchungen || [])
+      .filter(
+        (f) =>
+          f.kategorie === 'Einnahme' &&
+          (f.art === 'Miete' || f.art === 'Nebenkosten') &&
+          f.status === 'Bezahlt' &&
+          new Date(f.datum) >= startOfMonth
+      )
+      .reduce((s, f) => s + (f.betrag || 0), 0);
+
+    const overdues = (finanzbuchungen || []).filter((f) => f.status === 'Überfällig');
+    const overduesAmount = overdues.reduce((s, f) => s + (f.betrag || 0), 0);
+
+    const in60days = (vertraege || []).filter((v) => {
+      if (!v.mietende || v.status !== 'aktiv') return false;
+      const end = new Date(v.mietende);
+      const diff = (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+      return diff >= 0 && diff <= 60;
+    }).length;
+
+    const openMaint = (wartungen || []).filter((w) => w.status !== 'Erledigt').length;
+
+    return {
+      sollEinnahmen: soll,
+      istEinnahmen: ist,
+      ueberfaelligeAnzahl: overdues.length,
+      ueberfaelligerBetrag: overduesAmount,
+      auslaufendeVertraege: in60days,
+      offeneWartungen: openMaint,
+    };
+  }, [finanzbuchungen, vertraege, wartungen]);
+
+  // Chart data: last 12 months payments
+  const chartData = useMemo(() => {
+    const months: { label: string; value: number; key: string }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = new Intl.DateTimeFormat('de-DE', { month: 'short' }).format(d);
+      months.push({ label, value: 0, key });
     }
 
-    // Load all data
-    setData({
-      immobilien: await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN),
-      mieter: await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER),
-      finanzbuchungen: await LocalStorage.getAll<Finanzbuchung>(STORAGE_KEYS.FINANZBUCHUNGEN),
-      wartungen: await LocalStorage.getAll<WartungMaengel>(STORAGE_KEYS.WARTUNG_MAENGEL)
-    });
-  };
+    (finanzbuchungen || [])
+      .filter(
+        (f) => f.kategorie === 'Einnahme' && (f.art === 'Miete' || f.art === 'Nebenkosten') && f.status === 'Bezahlt'
+      )
+      .forEach((f) => {
+        const fd = new Date(f.datum);
+        const k = `${fd.getFullYear()}-${String(fd.getMonth() + 1).padStart(2, '0')}`;
+        const idx = months.findIndex((m) => m.key === k);
+        if (idx >= 0) months[idx].value += f.betrag || 0;
+      });
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR'
-    }).format(amount);
-  };
+    return months;
+  }, [finanzbuchungen]);
 
-  // Calculate statistics
-  const stats = {
-    totalImmobilien: data.immobilien.length,
-    vermieteteImmobilien: data.immobilien.filter(i => i.status === 'Vermietet').length,
-    aktiveMieter: data.mieter.filter(m => m.status === 'Aktiv').length,
-    monatlicheEinnahmen: data.finanzbuchungen
-      .filter(f => f.kategorie === 'Einnahme' && f.status === 'Bezahlt')
-      .reduce((sum, f) => sum + f.betrag, 0),
-    offeneWartungen: data.wartungen.filter(w => w.status !== 'Erledigt').length,
-    dringendeWartungen: data.wartungen.filter(w => w.prioritaet === 'Dringend' && w.status !== 'Erledigt').length
-  };
+  // Recent activity lists
+  const recentPayments = useMemo(() => {
+    return (finanzbuchungen || [])
+      .filter((f) => f.kategorie === 'Einnahme')
+      .sort((a, b) => new Date(b.datum).getTime() - new Date(a.datum).getTime())
+      .slice(0, 5);
+  }, [finanzbuchungen]);
 
-  const recentTransactions = data.finanzbuchungen
-    .sort((a, b) => new Date(b.datum).getTime() - new Date(a.datum).getTime())
-    .slice(0, 5);
-
-  const urgentMaintenance = data.wartungen
-    .filter(w => w.prioritaet === 'Dringend' && w.status !== 'Erledigt')
-    .slice(0, 5);
+  const recentMaintenance = useMemo(() => {
+    return (wartungen || [])
+      .slice()
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .slice(0, 5);
+  }, [wartungen]);
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground">Übersicht Ihrer Immobilienverwaltung</p>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Immobilien</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalImmobilien}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.vermieteteImmobilien} vermietet
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Aktive Mieter</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.aktiveMieter}</div>
-            <p className="text-xs text-muted-foreground">
-              von {data.mieter.length} gesamt
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monatliche Einnahmen</CardTitle>
+            <CardTitle className="text-sm font-medium">Gesamte Mieteinnahmen (Soll / Ist)</CardTitle>
             <Euro className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.monatlicheEinnahmen)}</div>
-            <p className="text-xs text-muted-foreground">
-              <TrendingUp className="inline h-3 w-3 mr-1" />
-              Letzte 30 Tage
-            </p>
+            <div className="text-lg font-semibold">{fmtCurrency(sollEinnahmen)}</div>
+            <p className="text-xs text-muted-foreground">Ist: {fmtCurrency(istEinnahmen)} im aktuellen Monat</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Offene Wartungen</CardTitle>
+            <CardTitle className="text-sm font-medium">Überfällige Zahlungen</CardTitle>
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.offeneWartungen}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.dringendeWartungen} dringend
-            </p>
+            <div className="text-2xl font-bold">{ueberfaelligeAnzahl}</div>
+            <p className="text-xs text-muted-foreground">Summe: {fmtCurrency(ueberfaelligerBetrag)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Auslaufende Verträge (60 Tage)</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{auslaufendeVertraege}</div>
+            <p className="text-xs text-muted-foreground">Endet in ≤ 60 Tagen</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Offene Wartungsaufträge</CardTitle>
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{offeneWartungen}</div>
+            <p className="text-xs text-muted-foreground">Gesamt offen</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Activity */}
+      {/* Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Monatliche Mietzahlungen (letzte 12 Monate)</CardTitle>
+        </CardHeader>
+        <CardContent className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+              <XAxis dataKey="label" />
+              <YAxis tickFormatter={(v) => new Intl.NumberFormat('de-DE').format(v)} />
+              <Tooltip
+                formatter={(value: any) => [fmtCurrency(value as number), 'Einnahmen']}
+                labelFormatter={(l) => l as string}
+              />
+              <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Recent activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Transactions */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Euro className="h-5 w-5" />
-              <span>Aktuelle Buchungen</span>
-            </CardTitle>
+            <CardTitle>Letzte Zahlungen</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentTransactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      transaction.kategorie === 'Einnahme' ? 'bg-green-500' : 'bg-red-500'
-                    }`} />
-                    <div>
-                      <div className="font-medium text-sm">{transaction.beschreibung}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(transaction.datum).toLocaleDateString('de-DE')}
-                      </div>
-                    </div>
+              {recentPayments.map((p) => (
+                <div key={p.id} className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-sm">{p.beschreibung}</div>
+                    <div className="text-xs text-muted-foreground">{fmtDate(p.datum)} · {p.art}</div>
                   </div>
-                  <div className={`font-medium ${
-                    transaction.kategorie === 'Einnahme' ? 'text-success-foreground' : 'text-destructive-foreground'
-                  }`}>
-                    {transaction.kategorie === 'Einnahme' ? '+' : '-'}{formatCurrency(transaction.betrag)}
-                  </div>
+                  <div className="font-medium text-right">{fmtCurrency(p.betrag)}</div>
                 </div>
               ))}
-              {recentTransactions.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Keine aktuellen Buchungen
-                </p>
+              {recentPayments.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Keine Zahlungen vorhanden</p>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Urgent Maintenance */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5" />
-              <span>Dringende Wartungen</span>
-            </CardTitle>
+            <CardTitle>Letzte Wartungs-Updates</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {urgentMaintenance.map((maintenance) => (
-                <div key={maintenance.id} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <AlertTriangle className="h-4 w-4 text-red-500" />
-                    <div>
-                      <div className="font-medium text-sm">{maintenance.titel}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {maintenance.kategorie}
-                      </div>
-                    </div>
+              {recentMaintenance.map((w) => (
+                <div key={w.id} className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-sm">{w.titel}</div>
+                    <div className="text-xs text-muted-foreground">{w.kategorie} · aktualisiert {fmtDate(w.updated_at)}</div>
                   </div>
-                  <Badge variant="destructive" className="text-xs">
-                    {maintenance.prioritaet}
-                  </Badge>
+                  <Badge variant={w.status === 'Erledigt' ? 'secondary' : 'default'} className="text-xs">{w.status}</Badge>
                 </div>
               ))}
-              {urgentMaintenance.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Keine dringenden Wartungen
-                </p>
+              {recentMaintenance.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Keine Wartungsaktivitäten</p>
               )}
             </div>
           </CardContent>

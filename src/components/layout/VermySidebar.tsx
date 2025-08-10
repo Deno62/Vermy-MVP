@@ -8,6 +8,7 @@ import {
   Wrench,
   AlertTriangle,
   FileText,
+  LayoutDashboard,
   Menu,
   X
 } from 'lucide-react';
@@ -16,6 +17,12 @@ import { Button } from '@/components/ui/button';
 import logo from '@/assets/vermy-logo.png';
 
 const navigationItems = [
+  {
+    title: 'Dashboard',
+    url: '/dashboard',
+    icon: LayoutDashboard,
+    description: 'Übersicht'
+  },
   {
     title: 'Immobilien',
     url: '/immobilien',
