@@ -26,7 +26,8 @@ export default {
 				foreground: 'hsl(var(--foreground))',
 				primary: {
 					DEFAULT: 'hsl(var(--primary))',
-					foreground: 'hsl(var(--primary-foreground))'
+					foreground: 'hsl(var(--primary-foreground))',
+					hover: 'hsl(var(--primary-hover))'
 				},
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
@@ -35,6 +36,14 @@ export default {
 				destructive: {
 					DEFAULT: 'hsl(var(--destructive))',
 					foreground: 'hsl(var(--destructive-foreground))'
+				},
+				warning: {
+					DEFAULT: 'hsl(var(--warning))',
+					foreground: 'hsl(var(--warning-foreground))'
+				},
+				success: {
+					DEFAULT: 'hsl(var(--success))',
+					foreground: 'hsl(var(--success-foreground))'
 				},
 				muted: {
 					DEFAULT: 'hsl(var(--muted))',
@@ -52,6 +61,17 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				// CRM specific colors
+				'crm-sidebar': 'hsl(var(--crm-sidebar))',
+				'crm-sidebar-foreground': 'hsl(var(--crm-sidebar-foreground))',
+				'crm-sidebar-accent': 'hsl(var(--crm-sidebar-accent))',
+				'crm-topbar': 'hsl(var(--crm-topbar))',
+				'crm-content': 'hsl(var(--crm-content))',
+				// Status colors
+				'status-available': 'hsl(var(--status-available))',
+				'status-occupied': 'hsl(var(--status-occupied))',
+				'status-maintenance': 'hsl(var(--status-maintenance))',
+				'status-vacant': 'hsl(var(--status-vacant))',
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
