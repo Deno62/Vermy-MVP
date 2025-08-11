@@ -1,82 +1,106 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import DataTable from '@/components/common/DataTable';
 import { WartungMaengel, Immobilie } from '@/types/entities';
-import { LocalStorage, STORAGE_KEYS } from '@/utils/storage';
 import { Wrench, Building2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { wartungRepository } from '@/repositories/wartungRepository';
+import { immobilienRepository } from '@/repositories/immobilienRepository';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const schema = z.object({
+  immobilie_id: z.string().min(1, 'Immobilie ist erforderlich'),
+  titel: z.string().min(1, 'Titel ist erforderlich'),
+  beschreibung: z.string().optional(),
+  kategorie: z.enum(['Wartung','Reparatur','Mangel','Modernisierung']),
+  prioritaet: z.enum(['Niedrig','Normal','Hoch','Dringend']),
+  status: z.enum(['Gemeldet','In Bearbeitung','Erledigt','Verschoben']),
+  beauftragt_am: z.coerce.date().optional(),
+});
+
+type FormValues = z.infer<typeof schema>;
 
 const WartungPage = () => {
   const [wartungen, setWartungen] = useState<WartungMaengel[]>([]);
   const [immobilien, setImmobilien] = useState<Immobilie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<WartungMaengel | null>(null);
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { immobilie_id: '', titel: '', beschreibung: '', kategorie: 'Wartung', prioritaet: 'Normal', status: 'Gemeldet', beauftragt_am: undefined },
+  });
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
-    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
-    setImmobilien(immobilienData);
-    
-    const wartungenData = await LocalStorage.getAll<WartungMaengel>(STORAGE_KEYS.WARTUNG_MAENGEL);
-    setWartungen(wartungenData);
+    setLoading(true);
+    const [immos, data] = await Promise.all([immobilienRepository.list(), wartungRepository.list()]);
+    setImmobilien(immos);
+    setWartungen(data);
     setLoading(false);
   };
 
   const handleAdd = () => {
-    console.log('Add new Wartung');
+    setEditing(null);
+    form.reset({ immobilie_id: '', titel: '', beschreibung: '', kategorie: 'Wartung', prioritaet: 'Normal', status: 'Gemeldet', beauftragt_am: undefined });
+    setOpen(true);
   };
 
-  const handleEdit = (item: WartungMaengel) => {
-    console.log('Edit Wartung:', item);
+  const handleEdit = (w: WartungMaengel) => {
+    setEditing(w);
+    form.reset({
+      immobilie_id: (w as any).immobilie_id,
+      titel: (w as any).titel,
+      beschreibung: (w as any).beschreibung,
+      kategorie: (w as any).kategorie,
+      prioritaet: (w as any).prioritaet,
+      status: (w as any).status,
+      beauftragt_am: (w as any).beauftragt_am ? new Date((w as any).beauftragt_am) : undefined,
+    });
+    setOpen(true);
   };
 
-  const handleDelete = async (item: WartungMaengel) => {
-    if (confirm(`Möchten Sie den Eintrag "${item.titel}" wirklich löschen?`)) {
-      await LocalStorage.delete(STORAGE_KEYS.WARTUNG_MAENGEL, item.id);
+  const onSubmit = async (values: FormValues) => {
+    if (editing) {
+      await wartungRepository.update(editing.id, { ...values, updated_at: new Date() } as any);
+    } else {
+      await wartungRepository.create(values as any);
+    }
+    setOpen(false);
+    setEditing(null);
+    await loadData();
+  };
+
+  const handleDelete = async (w: WartungMaengel) => {
+    if (confirm(`Möchten Sie den Eintrag "${(w as any).titel}" wirklich löschen?`)) {
+      await wartungRepository.remove(w.id);
       loadData();
     }
   };
 
   const getStatusBadge = (status: string) => {
-    const variants = {
-      'Gemeldet': 'outline',
-      'In Bearbeitung': 'secondary',
-      'Erledigt': 'default',
-      'Verschoben': 'destructive'
-    } as const;
-
-    return (
-      <Badge variant={variants[status as keyof typeof variants] || 'default'}>
-        {status}
-      </Badge>
-    );
+    const variants = { 'Gemeldet': 'outline', 'In Bearbeitung': 'secondary', 'Erledigt': 'default', 'Verschoben': 'destructive' } as const;
+    return <Badge variant={variants[status as keyof typeof variants] || 'default'}>{status}</Badge>;
   };
 
   const getPrioritaetBadge = (prioritaet: string) => {
-    const colors = {
-      'Niedrig': 'bg-blue-100 text-blue-800',
-      'Normal': 'bg-gray-100 text-gray-800',
-      'Hoch': 'bg-yellow-100 text-yellow-800',
-      'Dringend': 'bg-red-100 text-red-800'
-    };
-
-    return (
-      <Badge className={colors[prioritaet as keyof typeof colors] || colors.Normal}>
-        {prioritaet}
-      </Badge>
-    );
+    const colors = { 'Niedrig': 'bg-blue-100 text-blue-800', 'Normal': 'bg-gray-100 text-gray-800', 'Hoch': 'bg-yellow-100 text-yellow-800', 'Dringend': 'bg-red-100 text-red-800' };
+    return <Badge className={(colors as any)[prioritaet] || (colors as any).Normal}>{prioritaet}</Badge>;
   };
 
   const getKategorieIcon = (kategorie: string) => {
-    const icons = {
-      'Wartung': Wrench,
-      'Reparatur': AlertTriangle,
-      'Mangel': AlertTriangle,
-      'Modernisierung': CheckCircle
-    };
-    
-    const Icon = icons[kategorie as keyof typeof icons] || Wrench;
+    const icons: any = { 'Wartung': Wrench, 'Reparatur': AlertTriangle, 'Mangel': AlertTriangle, 'Modernisierung': CheckCircle };
+    const Icon = icons[kategorie] || Wrench;
     return <Icon className="h-4 w-4 text-muted-foreground" />;
   };
 
@@ -87,10 +111,7 @@ const WartungPage = () => {
 
   const formatCurrency = (amount?: number) => {
     if (!amount) return '-';
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR'
-    }).format(amount);
+    return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
   };
 
   const formatDate = (date?: Date) => {
@@ -105,10 +126,10 @@ const WartungPage = () => {
       sortable: true,
       render: (value: string, row: WartungMaengel) => (
         <div className="flex items-center space-x-2">
-          {getKategorieIcon(row.kategorie)}
+          {getKategorieIcon((row as any).kategorie)}
           <div>
-            <div className="font-medium">{value}</div>
-            <div className="text-sm text-muted-foreground">{row.kategorie}</div>
+            <div className="font-medium">{(row as any).titel}</div>
+            <div className="text-sm text-muted-foreground">{(row as any).kategorie}</div>
           </div>
         </div>
       )
@@ -165,30 +186,134 @@ const WartungPage = () => {
           <h1 className="text-2xl font-bold text-foreground">Wartung & Mängel</h1>
           <p className="text-muted-foreground">Verwalten Sie Wartungsaufgaben und Mängel</p>
         </div>
-        
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Wrench className="h-4 w-4" />
-            <span>{wartungen.length} Einträge</span>
-          </div>
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <AlertTriangle className="h-4 w-4" />
-            <span>{wartungen.filter(w => w.prioritaet === 'Dringend').length} dringend</span>
-          </div>
-        </div>
       </div>
 
       <DataTable
         title="Wartung & Mängel"
         data={wartungen}
-        columns={columns}
-        searchKeys={['titel', 'beschreibung', 'kategorie']}
+        columns={columns as any}
+        searchKeys={['titel', 'beschreibung', 'kategorie'] as any}
         onAdd={handleAdd}
         onEdit={handleEdit}
         onDelete={handleDelete}
         loading={loading}
         emptyMessage="Keine Wartungseinträge gefunden"
       />
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Eintrag bearbeiten' : 'Neuer Eintrag'}</DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="immobilie_id" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Immobilie</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Immobilie wählen" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {immobilien.map(i => <SelectItem key={i.id} value={i.id}>{i.bezeichnung}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="titel" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Titel</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+
+              <FormField control={form.control} name="beschreibung" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Beschreibung</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField control={form.control} name="kategorie" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Kategorie</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Kategorie" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {['Wartung','Reparatur','Mangel','Modernisierung'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="prioritaet" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Priorität</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Priorität" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {['Niedrig','Normal','Hoch','Dringend'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="beauftragt_am" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Beauftragt am</FormLabel>
+                    <FormControl>
+                      <Input type="date" value={field.value ? new Date(field.value).toISOString().slice(0,10) : ''} onChange={e => field.onChange(new Date(e.target.value))} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+
+              <FormField control={form.control} name="status" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Status wählen" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {['Gemeldet','In Bearbeitung','Erledigt','Verschoben'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
+                <Button type="submit">{editing ? 'Speichern' : 'Anlegen'}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

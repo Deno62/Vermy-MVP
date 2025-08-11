@@ -79,7 +79,9 @@ export async function seedIfEmpty() {
           immobilie_id: m.immobilie_id!,
           mieter_id: m.id,
           mietbeginn: new Date(new Date().getFullYear(), Math.max(0, new Date().getMonth()-idx%6), 1),
-          mietende: undefined,
+          mietende: (idx % 4 === 1)
+            ? new Date(new Date().getFullYear(), new Date().getMonth() + 1, 15)
+            : undefined,
           kaltmiete: 850 + (idx * 25),
           nebenkosten: 180,
           zahlungsintervall: 'monatlich',

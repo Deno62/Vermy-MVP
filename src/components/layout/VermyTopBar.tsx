@@ -109,6 +109,53 @@ export default function VermyTopBar({ currentModule, onSearch }: VermyTopBarProp
           <Settings className="h-4 w-4" />
         </Button>
 
+        {/* Backup Export */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={async () => {
+            try {
+              const bundle = await exportBackup();
+              const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+              downloadJSON(bundle, `vermy-backup-${stamp}.json`);
+            } catch (e) {
+              console.error(e);
+              alert('Backup-Export fehlgeschlagen.');
+            }
+          }}
+          title="Backup exportieren"
+        >
+          <Download className="h-4 w-4" />
+        </Button>
+
+        {/* Backup Import */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+              const text = await file.text();
+              const json = JSON.parse(text);
+              if (confirm('Achtung: Alle lokalen Daten werden durch das Backup ersetzt. Fortfahren?')) {
+                await importBackup(json);
+                window.location.reload();
+              }
+            } catch (err) {
+              console.error(err);
+              alert('Ungültige Backup-Datei.');
+            } finally {
+              e.currentTarget.value = '';
+            }
+          }}
+        />
+        <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} title="Backup importieren">
+          <Upload className="h-4 w-4" />
+        </Button>
+
         {/* User Profile */}
         <Button variant="ghost" size="sm" className="flex items-center space-x-2">
           <User className="h-4 w-4" />

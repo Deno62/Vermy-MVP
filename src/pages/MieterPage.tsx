@@ -1,66 +1,96 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import DataTable from '@/components/common/DataTable';
 import { Mieter, Immobilie } from '@/types/entities';
-import { LocalStorage, STORAGE_KEYS } from '@/utils/storage';
-import { generateMockMieter } from '@/utils/mockData';
 import { User, Mail, Phone, Building2 } from 'lucide-react';
+import { mieterRepository } from '@/repositories/mieterRepository';
+import { immobilienRepository } from '@/repositories/immobilienRepository';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const schema = z.object({
+  anrede: z.enum(['Herr','Frau','Divers'], { required_error: 'Anrede ist erforderlich' }),
+  vorname: z.string().min(1, 'Vorname ist erforderlich'),
+  nachname: z.string().min(1, 'Nachname ist erforderlich'),
+  email: z.string().email('Ungültige E-Mail'),
+  telefon: z.string().min(3, 'Telefon ist erforderlich'),
+  immobilie_id: z.string().optional(),
+  status: z.enum(['Aktiv','Ausgezogen','Gekündigt'], { required_error: 'Status ist erforderlich' }),
+});
+
+type FormValues = z.infer<typeof schema>;
 
 const MieterPage = () => {
   const [mieter, setMieter] = useState<Mieter[]>([]);
   const [immobilien, setImmobilien] = useState<Immobilie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Mieter | null>(null);
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { anrede: 'Herr', vorname: '', nachname: '', email: '', telefon: '', immobilie_id: undefined, status: 'Aktiv' },
+  });
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
-    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
-    setImmobilien(immobilienData);
-    
-    let mieterData = await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
-    
-    // Generate mock data if empty
-    if (mieterData.length === 0 && immobilienData.length > 0) {
-      const mockData = generateMockMieter(immobilienData, 12);
-      for (const mieter of mockData) {
-        await LocalStorage.save(STORAGE_KEYS.MIETER, mieter);
-      }
-      mieterData = await LocalStorage.getAll<Mieter>(STORAGE_KEYS.MIETER);
-    }
-    
-    setMieter(mieterData);
+    setLoading(true);
+    const [immos, ms] = await Promise.all([immobilienRepository.list(), mieterRepository.list()]);
+    setImmobilien(immos);
+    setMieter(ms);
     setLoading(false);
   };
 
   const handleAdd = () => {
-    console.log('Add new Mieter');
+    setEditing(null);
+    form.reset({ anrede: 'Herr', vorname: '', nachname: '', email: '', telefon: '', immobilie_id: undefined, status: 'Aktiv' });
+    setOpen(true);
   };
 
-  const handleEdit = (mieter: Mieter) => {
-    console.log('Edit Mieter:', mieter);
+  const handleEdit = (m: Mieter) => {
+    setEditing(m);
+    form.reset({
+      anrede: (m as any).anrede || 'Herr',
+      vorname: (m as any).vorname || '',
+      nachname: (m as any).nachname || '',
+      email: (m as any).email || '',
+      telefon: (m as any).telefon || '',
+      immobilie_id: (m as any).immobilie_id,
+      status: (m as any).status || 'Aktiv',
+    });
+    setOpen(true);
   };
 
-  const handleDelete = async (mieter: Mieter) => {
-    if (confirm(`Möchten Sie den Mieter "${mieter.vorname} ${mieter.nachname}" wirklich löschen?`)) {
-      await LocalStorage.delete(STORAGE_KEYS.MIETER, mieter.id);
+  const onSubmit = async (values: FormValues) => {
+    if (editing) {
+      await mieterRepository.update(editing.id, { ...values, updated_at: new Date() } as any);
+    } else {
+      await mieterRepository.create(values as any);
+    }
+    setOpen(false);
+    setEditing(null);
+    await loadData();
+  };
+
+  const handleDelete = async (m: Mieter) => {
+    if (confirm(`Möchten Sie den Mieter "${(m as any).vorname} ${(m as any).nachname}" wirklich löschen?`)) {
+      await mieterRepository.remove(m.id);
       loadData();
     }
   };
 
   const getStatusBadge = (status: string) => {
-    const variants = {
-      'Aktiv': 'default',
-      'Ausgezogen': 'secondary',
-      'Gekündigt': 'destructive'
-    } as const;
-
-    return (
-      <Badge variant={variants[status as keyof typeof variants] || 'default'}>
-        {status}
-      </Badge>
-    );
+    const variants = { 'Aktiv': 'default', 'Ausgezogen': 'secondary', 'Gekündigt': 'destructive' } as const;
+    return <Badge variant={variants[status as keyof typeof variants] || 'default'}>{status}</Badge>;
   };
 
   const getImmobilienBezeichnung = (immobilie_id?: string) => {
@@ -83,8 +113,8 @@ const MieterPage = () => {
         <div className="flex items-center space-x-2">
           <User className="h-4 w-4 text-muted-foreground" />
           <div>
-            <div className="font-medium">{row.anrede} {value} {row.nachname}</div>
-            <div className="text-sm text-muted-foreground">{row.status}</div>
+            <div className="font-medium">{(row as any).anrede} {(row as any).vorname} {(row as any).nachname}</div>
+            <div className="text-sm text-muted-foreground">{(row as any).status}</div>
           </div>
         </div>
       )
@@ -97,11 +127,11 @@ const MieterPage = () => {
         <div className="space-y-1">
           <div className="flex items-center space-x-2 text-sm">
             <Mail className="h-3 w-3 text-muted-foreground" />
-            <span>{value}</span>
+            <span>{(row as any).email}</span>
           </div>
           <div className="flex items-center space-x-2 text-sm">
             <Phone className="h-3 w-3 text-muted-foreground" />
-            <span>{row.telefon}</span>
+            <span>{(row as any).telefon}</span>
           </div>
         </div>
       )
@@ -139,31 +169,129 @@ const MieterPage = () => {
           <h1 className="text-2xl font-bold text-foreground">Mieter</h1>
           <p className="text-muted-foreground">Verwalten Sie Ihre Mieterverträge</p>
         </div>
-        
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <User className="h-4 w-4" />
-            <span>{mieter.length} Mieter</span>
-          </div>
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Building2 className="h-4 w-4" />
-            <span>{mieter.filter(m => m.status === 'Aktiv').length} aktiv</span>
-          </div>
-        </div>
       </div>
 
       {/* Data Table */}
       <DataTable
         title="Alle Mieter"
         data={mieter}
-        columns={columns}
-        searchKeys={['vorname', 'nachname', 'email', 'telefon']}
+        columns={columns as any}
+        searchKeys={['vorname', 'nachname', 'email', 'telefon'] as any}
         onAdd={handleAdd}
         onEdit={handleEdit}
         onDelete={handleDelete}
         loading={loading}
         emptyMessage="Keine Mieter gefunden"
       />
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Mieter bearbeiten' : 'Neuer Mieter'}</DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField control={form.control} name="anrede" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Anrede</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Anrede" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {['Herr','Frau','Divers'].map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="vorname" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vorname</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="nachname" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nachname</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>E-Mail</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="telefon" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefon</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="immobilie_id" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Immobilie</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Zuweisen (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {immobilien.map(i => (
+                          <SelectItem key={i.id} value={i.id}>{i.bezeichnung}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+
+              <FormField control={form.control} name="status" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Status wählen" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {['Aktiv','Ausgezogen','Gekündigt'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
+                <Button type="submit">{editing ? 'Speichern' : 'Anlegen'}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
