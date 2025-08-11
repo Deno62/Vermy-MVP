@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import DataTable from '@/components/common/DataTable';
 import { Immobilie } from '@/types/entities';
 import { Building2, MapPin, Users } from 'lucide-react';
-import { immobilienRepository } from '@/repositories/immobilienRepository';
+import { immobilienRepo } from '@/repositories/immobilienRepo';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,6 +24,8 @@ const schema = z.object({
   adresse: z.string().min(1, 'Adresse ist erforderlich'),
   plz: z.string().optional(),
   ort: z.string().optional(),
+  typ: z.enum(['Haus','Wohnung'], { required_error: 'Typ ist erforderlich' }),
+  parent_id: z.string().optional().nullable(),
   art: z.enum(['Wohnung', 'Haus', 'Gewerbe', 'Garage', 'Sonstiges'], { required_error: 'Art ist erforderlich' }),
   zimmer: z.coerce.number().int().min(1, 'Mindestens 1 Zimmer'),
   flaeche: z.coerce.number().min(0, 'Ungültige Fläche'),
@@ -38,28 +40,30 @@ const ImmobilienPage = () => {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Immobilie | null>(null);
+  const [haeuser, setHaeuser] = useState<any[]>([]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      bezeichnung: '', adresse: '', plz: '', ort: '', art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar',
+      bezeichnung: '', adresse: '', plz: '', ort: '', typ: 'Wohnung', parent_id: null, art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar',
     },
   });
 
   useEffect(() => {
     loadImmobilien();
+    loadHaeuser();
   }, []);
 
   const loadImmobilien = async () => {
     setLoading(true);
-    const data = await immobilienRepository.list();
+    const data = await immobilienRepo.list();
     setImmobilien(Array.isArray(data) ? data : []);
     setLoading(false);
   };
 
   const handleAdd = () => {
     setEditing(null);
-    form.reset({ bezeichnung: '', adresse: '', plz: '', ort: '', art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar' });
+    form.reset({ bezeichnung: '', adresse: '', plz: '', ort: '', typ: 'Wohnung', parent_id: null, art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar' });
     setOpen(true);
   };
 
@@ -70,7 +74,9 @@ const ImmobilienPage = () => {
       adresse: immobilie.adresse,
       plz: (immobilie as any).plz || '',
       ort: (immobilie as any).ort || '',
-      art: immobilie.art as any,
+      typ: ((immobilie as any).typ as any) || 'Wohnung',
+      parent_id: (immobilie as any).parent_id ?? null,
+      art: (immobilie as any).art as any,
       zimmer: immobilie.zimmer || 1,
       flaeche: (immobilie as any).flaeche || 0,
       kaltmiete: (immobilie as any).kaltmiete || 0,
@@ -80,13 +86,18 @@ const ImmobilienPage = () => {
   };
 
   const onSubmit = async (values: FormValues) => {
+    const payload = {
+      ...values,
+      // If Haus, ensure parent_id is null
+      parent_id: values.typ === 'Haus' ? null : values.parent_id ?? null,
+    } as any;
     if (editing) {
-      await immobilienRepository.update(editing.id, {
-        ...values,
+      await immobilienRepo.update(editing.id, {
+        ...payload,
         updated_at: new Date(),
       } as any);
     } else {
-      await immobilienRepository.create(values as any);
+      await immobilienRepo.create(payload as any);
     }
     setOpen(false);
     setEditing(null);
@@ -95,7 +106,7 @@ const ImmobilienPage = () => {
 
   const handleDelete = async (immobilie: Immobilie) => {
     if (confirm(`Möchten Sie die Immobilie "${immobilie.bezeichnung}" wirklich löschen?`)) {
-      await immobilienRepository.remove(immobilie.id);
+      await immobilienRepo.remove(immobilie.id);
       loadImmobilien();
     }
   };
@@ -261,18 +272,18 @@ const ImmobilienPage = () => {
                     <FormMessage />
                   </FormItem>
                 )} />
-                <FormField control={form.control} name="art" render={({ field }) => (
+                <FormField control={form.control} name="typ" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Art</FormLabel>
+                    <FormLabel>Typ</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Art wählen" />
+                          <SelectValue placeholder="Typ wählen" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {['Wohnung','Haus','Gewerbe','Garage','Sonstiges'].map(a => (
-                          <SelectItem key={a} value={a}>{a}</SelectItem>
+                        {['Haus','Wohnung'].map(t => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -280,6 +291,27 @@ const ImmobilienPage = () => {
                   </FormItem>
                 )} />
               </div>
+
+              {form.watch('typ') === 'Wohnung' && (
+                <FormField control={form.control} name="parent_id" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Parent-Haus</FormLabel>
+                    <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Haus wählen" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {(haeuser || []).map((h) => (
+                          <SelectItem key={h.id} value={h.id}>{h.bezeichnung}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField control={form.control} name="zimmer" render={({ field }) => (
