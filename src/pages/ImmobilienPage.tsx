@@ -18,7 +18,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
+import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 const schema = z.object({
   bezeichnung: z.string().min(1, 'Bezeichnung ist erforderlich'),
   adresse: z.string().min(1, 'Adresse ist erforderlich'),
@@ -31,6 +32,10 @@ const schema = z.object({
   flaeche: z.coerce.number().min(0, 'Ungültige Fläche'),
   kaltmiete: z.coerce.number().min(0, 'Ungültige Kaltmiete').optional(),
   status: z.enum(['Verfügbar', 'Vermietet', 'Wartung', 'Leerstand']),
+}).superRefine((val, ctx) => {
+  if (val.typ === 'Wohnung' && (!val.parent_id || val.parent_id.length === 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['parent_id'], message: 'Bitte wählen Sie ein Parent-Haus' });
+  }
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -42,12 +47,15 @@ const ImmobilienPage = () => {
   const [editing, setEditing] = useState<Immobilie | null>(null);
   const [haeuser, setHaeuser] = useState<any[]>([]);
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      bezeichnung: '', adresse: '', plz: '', ort: '', typ: 'Wohnung', parent_id: null, art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar',
-    },
-  });
+const navigate = useNavigate();
+const { toast } = useToast();
+
+const form = useForm<FormValues>({
+  resolver: zodResolver(schema),
+  defaultValues: {
+    bezeichnung: '', adresse: '', plz: '', ort: '', typ: 'Wohnung', parent_id: null, art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar',
+  },
+});
 
   useEffect(() => {
     loadImmobilien();
@@ -61,15 +69,15 @@ const ImmobilienPage = () => {
     setLoading(false);
   };
 
-  const loadHaeuser = async () => {
-    try {
-      const hs = await immobilienRepo.listHaeuser();
-      setHaeuser(Array.isArray(hs) ? hs : []);
-    } catch (e) {
-      console.error(e);
-      setHaeuser([]);
-    }
-  };
+const loadHaeuser = async () => {
+  try {
+    const hs = await immobilienRepo.listHaeuser();
+    setHaeuser(Array.isArray(hs) ? hs : []);
+  } catch (e: any) {
+    setHaeuser([]);
+    toast({ title: 'Fehler', description: 'Häuser konnten nicht geladen werden.', variant: 'destructive' });
+  }
+};
 
   const handleAdd = () => {
     setEditing(null);
@@ -95,31 +103,53 @@ const ImmobilienPage = () => {
     setOpen(true);
   };
 
-  const onSubmit = async (values: FormValues) => {
-    const payload = {
-      ...values,
-      // If Haus, ensure parent_id is null
-      parent_id: values.typ === 'Haus' ? null : values.parent_id ?? null,
-    } as any;
+const onSubmit = async (values: FormValues) => {
+  const payload = {
+    bezeichnung: values.bezeichnung,
+    adresse: values.adresse,
+    typ: values.typ,
+    zimmer: values.zimmer,
+    flaeche: (values as any).flaeche ?? (values as any).flaeche_qm ?? (values as any).flaecheQm,
+    kaltmiete: values.kaltmiete,
+    status: values.status,
+    parent_id: values.typ === 'Haus' ? null : values.parent_id ?? null,
+    // art intentionally preserved for compatibility if present in DB
+    art: (values as any).art,
+  } as any;
+
+  try {
+    let saved: any;
     if (editing) {
-      await immobilienRepo.update(editing.id, {
-        ...payload,
-        updated_at: new Date(),
-      } as any);
+      saved = await immobilienRepo.update(editing.id, payload);
+      toast({ title: 'Gespeichert', description: 'Immobilie aktualisiert.' });
     } else {
-      await immobilienRepo.create(payload as any);
+      saved = await immobilienRepo.create(payload);
+      toast({ title: 'Angelegt', description: 'Immobilie wurde erstellt.' });
     }
     setOpen(false);
     setEditing(null);
     await loadImmobilien();
-  };
-
-  const handleDelete = async (immobilie: Immobilie) => {
-    if (confirm(`Möchten Sie die Immobilie "${immobilie.bezeichnung}" wirklich löschen?`)) {
-      await immobilienRepo.remove(immobilie.id);
-      loadImmobilien();
+    if (saved && saved.id && !editing) {
+      navigate(`/immobilien/${saved.id}`);
     }
-  };
+  } catch (e: any) {
+    const message = e?.message || e?.error?.message || 'Speichern fehlgeschlagen.';
+    toast({ title: 'Fehler beim Speichern', description: message, variant: 'destructive' });
+  }
+};
+
+const handleDelete = async (immobilie: Immobilie) => {
+  if (confirm(`Möchten Sie die Immobilie "${immobilie.bezeichnung}" wirklich löschen?`)) {
+    try {
+      await immobilienRepo.remove(immobilie.id);
+      toast({ title: 'Gelöscht', description: 'Immobilie wurde gelöscht.' });
+      await loadImmobilien();
+    } catch (e: any) {
+      const message = e?.message || e?.error?.message || 'Löschen fehlgeschlagen.';
+      toast({ title: 'Fehler', description: message, variant: 'destructive' });
+    }
+  }
+};
 
   const getStatusBadge = (status: string) => {
     const variants = {
