@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login, seededCredentials } from '@/auth/auth';
+import { login, seededCredentials, signUp, resetPassword } from '@/auth/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,10 +13,10 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const res = login(email.trim(), password);
+    const res = await login(email.trim(), password);
     setLoading(false);
     if (res.ok) {
       navigate('/dashboard', { replace: true });
@@ -24,7 +24,6 @@ export default function LoginPage() {
       setError(res.error || 'Login fehlgeschlagen');
     }
   };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
@@ -46,6 +45,30 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Bitte warten…' : 'Anmelden'}
             </Button>
+            <div className="flex items-center justify-between text-xs">
+              <button
+                type="button"
+                className="underline text-muted-foreground"
+                onClick={async () => {
+                  if (!email) { alert('Bitte E-Mail eingeben.'); return; }
+                  const res = await resetPassword(email.trim());
+                  alert(res.ok ? 'E-Mail zum Zurücksetzen gesendet (prüfen Sie ggf. den Spam-Ordner).' : (res.error || 'Fehler beim Senden'));
+                }}
+              >
+                Passwort vergessen?
+              </button>
+              <button
+                type="button"
+                className="underline text-muted-foreground"
+                onClick={async () => {
+                  if (!email || !password) { alert('Bitte E-Mail und Passwort eingeben.'); return; }
+                  const res = await signUp(email.trim(), password);
+                  alert(res.ok ? 'Registrierung gestartet. Prüfen Sie Ihre E-Mail zur Bestätigung.' : (res.error || 'Registrierung fehlgeschlagen'));
+                }}
+              >
+                Registrieren
+              </button>
+            </div>
             <div className="text-xs text-muted-foreground text-center">
               Demo: {seededCredentials.email} / {seededCredentials.password}
             </div>

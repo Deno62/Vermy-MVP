@@ -1,6 +1,5 @@
-import { useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { vermyDb } from '@/db/vermyDb';
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Euro, AlertTriangle, Calendar, Wrench } from 'lucide-react';
@@ -16,19 +15,43 @@ import {
 } from 'recharts';
 
 const DashboardPage = () => {
-  // Live data from Dexie (auto-updates when tables change)
-  const finanzbuchungen = useLiveQuery(() => vermyDb.finanzbuchungen.toArray(), [], []) as Finanzbuchung[];
-  const vertraege = useLiveQuery(() => vermyDb.vertraege.toArray(), [], []) as Vertrag[];
-  const wartungen = useLiveQuery(() => vermyDb.wartungMaengel.toArray(), [], []) as WartungMaengel[];
+  const [finanzbuchungen, setFinanzbuchungen] = useState<Finanzbuchung[]>([]);
+  const [vertraege, setVertraege] = useState<Vertrag[]>([]);
+  const [wartungen, setWartungen] = useState<WartungMaengel[]>([]);
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      const [{ data: fb }, { data: vt }, { data: wt }] = await Promise.all([
+        supabase.from('finanzbuchungen').select('*').is('deleted_at', null),
+        supabase.from('vertraege').select('*').is('deleted_at', null),
+        supabase.from('wartung_maengel').select('*').is('deleted_at', null),
+      ]);
+      setFinanzbuchungen((fb || []) as any);
+      setVertraege((vt || []) as any);
+      setWartungen((wt || []) as any);
+    };
+    fetchAll();
+
+    // Realtime subscriptions
+    const channel = supabase
+      .channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finanzbuchungen' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vertraege' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wartung_maengel' }, () => fetchAll())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const fmtCurrency = (n: number) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
   const fmtDate = (d: Date | string | number) => new Date(d).toLocaleDateString('de-DE');
 
-  // KPI computations
   const {
     sollEinnahmen,
     istEinnahmen,
@@ -37,17 +60,14 @@ const DashboardPage = () => {
     auslaufendeVertraege,
     offeneWartungen,
   } = useMemo(() => {
-    // Soll: Summe monatliche Miete (inkl. NK) aus aktiven Verträgen
     const soll = (vertraege || [])
       .filter((v) => v.status === 'aktiv')
       .reduce((sum, v) => {
         const monat = (v.kaltmiete || 0) + (v.nebenkosten || 0);
-        // bei quartalsweise auf Monatswert umlegen
-        const faktor = v.zahlungsintervall === 'quartalsweise' ? 1 / 3 : 1;
+        const faktor = (v as any).zahlungsintervall === 'quartalsweise' ? 1 / 3 : 1;
         return sum + monat * faktor;
       }, 0);
 
-    // Ist: Summe bezahlter Mietzahlungen im aktuellen Monat
     const ist = (finanzbuchungen || [])
       .filter(
         (f) =>
@@ -80,7 +100,6 @@ const DashboardPage = () => {
     };
   }, [finanzbuchungen, vertraege, wartungen]);
 
-  // Chart data: last 12 months payments
   const chartData = useMemo(() => {
     const months: { label: string; value: number; key: string }[] = [];
     for (let i = 11; i >= 0; i--) {
@@ -91,9 +110,7 @@ const DashboardPage = () => {
     }
 
     (finanzbuchungen || [])
-      .filter(
-        (f) => f.kategorie === 'Einnahme' && (f.art === 'Miete' || f.art === 'Nebenkosten') && f.status === 'Bezahlt'
-      )
+      .filter((f) => f.kategorie === 'Einnahme' && (f.art === 'Miete' || f.art === 'Nebenkosten') && f.status === 'Bezahlt')
       .forEach((f) => {
         const fd = new Date(f.datum);
         const k = `${fd.getFullYear()}-${String(fd.getMonth() + 1).padStart(2, '0')}`;
@@ -104,7 +121,6 @@ const DashboardPage = () => {
     return months;
   }, [finanzbuchungen]);
 
-  // Recent activity lists
   const recentPayments = useMemo(() => {
     return (finanzbuchungen || [])
       .filter((f) => f.kategorie === 'Einnahme')
@@ -126,7 +142,6 @@ const DashboardPage = () => {
         <p className="text-muted-foreground">Übersicht Ihrer Immobilienverwaltung</p>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -173,7 +188,6 @@ const DashboardPage = () => {
         </Card>
       </div>
 
-      {/* Chart */}
       <Card>
         <CardHeader>
           <CardTitle>Monatliche Mietzahlungen (letzte 12 Monate)</CardTitle>
@@ -194,7 +208,6 @@ const DashboardPage = () => {
         </CardContent>
       </Card>
 
-      {/* Recent activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>

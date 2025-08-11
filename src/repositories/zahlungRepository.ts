@@ -1,46 +1,53 @@
-import { vermyDb } from '@/db/vermyDb';
+import { supabase } from '@/integrations/supabase/client';
 import type { Finanzbuchung } from '@/types/entities';
 import type { Repository, ListParams } from './baseRepository';
-import { applySearchAndFilters, softDelete } from './baseRepository';
 
 const SEARCH_FIELDS: (keyof Finanzbuchung)[] = ['beschreibung', 'art', 'referenz', 'status'];
 
 export const zahlungRepository: Repository<Finanzbuchung> = {
   async list(params?: ListParams<Finanzbuchung>) {
-    const all = await vermyDb.finanzbuchungen.where('id').notEqual('').toArray();
-    const active = all.filter((i) => !(i as any).deleted_at);
-    return applySearchAndFilters(active, params, SEARCH_FIELDS);
+    let query = supabase.from('finanzbuchungen').select('*').is('deleted_at', null);
+
+    if (params?.filters) {
+      for (const [k, v] of Object.entries(params.filters)) {
+        if (v != null && v !== '') query = query.eq(k, v as any);
+      }
+    }
+
+    const term = (params?.search || '').toString().trim();
+    if (term) {
+      const like = `%${term}%`;
+      query = query.or(SEARCH_FIELDS.map((f) => `${String(f)}.ilike.${like}`).join(','));
+    }
+
+    const { data, error } = await query.order('datum', { ascending: false });
+    if (error) {
+      console.error('finanzbuchungen.list error', error);
+      return [];
+    }
+    return (data as any[]) as Finanzbuchung[];
   },
+
   async get(id: string) {
-    return (await vermyDb.finanzbuchungen.get(id)) || null;
+    const { data, error } = await supabase.from('finanzbuchungen').select('*').eq('id', id).maybeSingle();
+    if (error) return null;
+    return data as any as Finanzbuchung;
   },
+
   async create(data) {
-    const now = new Date();
-    const item: Finanzbuchung = {
-      id: crypto.randomUUID(),
-      created_at: now,
-      updated_at: now,
-      version: 1,
-      immobilie_id: '',
-      art: 'Miete',
-      kategorie: 'Einnahme',
-      betrag: 0,
-      datum: now,
-      beschreibung: '',
-      status: 'Offen',
-      ...data,
-    } as Finanzbuchung;
-    await vermyDb.finanzbuchungen.add(item);
-    return item;
+    const { data: row, error } = await supabase.from('finanzbuchungen').insert(data as any).select('*').single();
+    if (error) throw error;
+    return row as any as Finanzbuchung;
   },
+
   async update(id, data) {
-    const existing = await vermyDb.finanzbuchungen.get(id);
-    if (!existing) throw new Error('Nicht gefunden');
-    const updated: Finanzbuchung = { ...existing, ...data, updated_at: new Date(), version: (existing.version || 0) + 1 };
-    await vermyDb.finanzbuchungen.put(updated);
-    return updated;
+    const { data: row, error } = await supabase.from('finanzbuchungen').update({ ...data, updated_at: new Date().toISOString() } as any).eq('id', id).select('*').single();
+    if (error) throw error;
+    return row as any as Finanzbuchung;
   },
+
   async remove(id) {
-    await softDelete(vermyDb.finanzbuchungen as any, id);
+    const { error } = await supabase.from('finanzbuchungen').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
   },
 };

@@ -1,47 +1,60 @@
-import { vermyDb } from '@/db/vermyDb';
+import { supabase } from '@/integrations/supabase/client';
 import type { Immobilie } from '@/types/entities';
 import type { Repository, ListParams } from './baseRepository';
-import { applySearchAndFilters, softDelete } from './baseRepository';
 
-const SEARCH_FIELDS: (keyof Immobilie)[] = ['bezeichnung', 'adresse', 'ort', 'plz', 'art', 'status'];
+const SEARCH_FIELDS: (keyof Immobilie)[] = ['bezeichnung', 'adresse', 'ort', 'art', 'status'];
 
 export const immobilienRepository: Repository<Immobilie> = {
   async list(params?: ListParams<Immobilie>) {
-    const all = await vermyDb.immobilien.where('id').notEqual('').toArray();
-    const active = all.filter((i) => !(i as any).deleted_at);
-    return applySearchAndFilters(active, params, SEARCH_FIELDS);
+    let query = supabase.from('immobilien').select('*').is('deleted_at', null);
+
+    // filters
+    if (params?.filters) {
+      for (const [k, v] of Object.entries(params.filters)) {
+        if (v != null && v !== '') query = query.eq(k, v as any);
+      }
+    }
+
+    // search
+    const term = (params?.search || '').toString().trim();
+    if (term) {
+      const like = `%${term}%`;
+      query = query.or(
+        SEARCH_FIELDS.map((f) => `${String(f)}.ilike.${like}`).join(',')
+      );
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      console.error('immobilien.list error', error);
+      return [];
+    }
+    return (data as any[]) as Immobilie[];
   },
+
   async get(id: string) {
-    return (await vermyDb.immobilien.get(id)) || null;
+    const { data, error } = await supabase.from('immobilien').select('*').eq('id', id).maybeSingle();
+    if (error) return null;
+    return (data as any) as Immobilie | null;
   },
+
   async create(data) {
-    const now = new Date();
-    const item: Immobilie = {
-      id: crypto.randomUUID(),
-      created_at: now,
-      updated_at: now,
-      version: 1,
-      bezeichnung: '',
-      adresse: '',
-      plz: '',
-      ort: '',
-      art: 'Wohnung',
-      zimmer: 1,
-      flaeche: 0,
-      status: 'Verfügbar',
-      ...data,
-    } as Immobilie;
-    await vermyDb.immobilien.add(item);
-    return item;
+    const payload = { ...data } as any;
+    const { data: rows, error } = await supabase.from('immobilien').insert(payload).select('*').single();
+    if (error) throw error;
+    return rows as any as Immobilie;
   },
+
   async update(id, data) {
-    const existing = await vermyDb.immobilien.get(id);
-    if (!existing) throw new Error('Nicht gefunden');
-    const updated: Immobilie = { ...existing, ...data, updated_at: new Date(), version: (existing.version || 0) + 1 };
-    await vermyDb.immobilien.put(updated);
-    return updated;
+    const payload = { ...data, updated_at: new Date().toISOString() } as any;
+    const { data: rows, error } = await supabase.from('immobilien').update(payload).eq('id', id).select('*').single();
+    if (error) throw error;
+    return rows as any as Immobilie;
   },
+
   async remove(id) {
-    await softDelete(vermyDb.immobilien as any, id);
+    // soft delete
+    const { error } = await supabase.from('immobilien').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
   },
 };

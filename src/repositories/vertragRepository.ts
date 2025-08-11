@@ -1,48 +1,53 @@
-import { vermyDb } from '@/db/vermyDb';
+import { supabase } from '@/integrations/supabase/client';
 import type { Vertrag } from '@/types/entities';
 import type { Repository, ListParams } from './baseRepository';
-import { applySearchAndFilters, softDelete } from './baseRepository';
 
 const SEARCH_FIELDS: (keyof Vertrag)[] = ['mietvertrags_id', 'status'];
 
 export const vertragRepository: Repository<Vertrag> = {
   async list(params?: ListParams<Vertrag>) {
-    const all = await vermyDb.vertraege.where('id').notEqual('').toArray();
-    const active = all.filter((i) => !(i as any).deleted_at);
-    return applySearchAndFilters(active, params, SEARCH_FIELDS);
+    let query = supabase.from('vertraege').select('*').is('deleted_at', null);
+
+    if (params?.filters) {
+      for (const [k, v] of Object.entries(params.filters)) {
+        if (v != null && v !== '') query = query.eq(k, v as any);
+      }
+    }
+
+    const term = (params?.search || '').toString().trim();
+    if (term) {
+      const like = `%${term}%`;
+      query = query.or(SEARCH_FIELDS.map((f) => `${String(f)}.ilike.${like}`).join(','));
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      console.error('vertraege.list error', error);
+      return [];
+    }
+    return (data as any[]) as Vertrag[];
   },
+
   async get(id: string) {
-    return (await vermyDb.vertraege.get(id)) || null;
+    const { data, error } = await supabase.from('vertraege').select('*').eq('id', id).maybeSingle();
+    if (error) return null;
+    return data as any as Vertrag;
   },
+
   async create(data) {
-    const now = new Date();
-    const item: Vertrag = {
-      id: crypto.randomUUID(),
-      created_at: now,
-      updated_at: now,
-      version: 1,
-      mietvertrags_id: `MV-${Math.random().toString().slice(2,6)}`,
-      immobilie_id: '',
-      mieter_id: '',
-      mietbeginn: now,
-      kaltmiete: 0,
-      nebenkosten: 0,
-      zahlungsintervall: 'monatlich',
-      kuendigungsfrist: '3 Monate',
-      status: 'aktiv',
-      ...data,
-    } as Vertrag;
-    await vermyDb.vertraege.add(item);
-    return item;
+    const { data: row, error } = await supabase.from('vertraege').insert(data as any).select('*').single();
+    if (error) throw error;
+    return row as any as Vertrag;
   },
+
   async update(id, data) {
-    const existing = await vermyDb.vertraege.get(id);
-    if (!existing) throw new Error('Nicht gefunden');
-    const updated: Vertrag = { ...existing, ...data, updated_at: new Date(), version: (existing.version || 0) + 1 };
-    await vermyDb.vertraege.put(updated);
-    return updated;
+    const { data: row, error } = await supabase.from('vertraege').update({ ...data, updated_at: new Date().toISOString() } as any).eq('id', id).select('*').single();
+    if (error) throw error;
+    return row as any as Vertrag;
   },
+
   async remove(id) {
-    await softDelete(vermyDb.vertraege as any, id);
+    const { error } = await supabase.from('vertraege').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
   },
 };

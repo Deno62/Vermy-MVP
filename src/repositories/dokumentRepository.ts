@@ -1,46 +1,54 @@
-import { vermyDb } from '@/db/vermyDb';
+import { supabase } from '@/integrations/supabase/client';
 import type { Dokument } from '@/types/entities';
 import type { Repository, ListParams } from './baseRepository';
-import { applySearchAndFilters } from './baseRepository';
 
 const SEARCH_FIELDS: (keyof Dokument)[] = ['titel', 'kategorie', 'dateiname'];
 
 export const dokumentRepository: Repository<Dokument> = {
   async list(params?: ListParams<Dokument>) {
-    const all = await vermyDb.dokumente.where('id').notEqual('').toArray();
-    const active = all.filter((i) => !(i as any).deleted_at);
-    return applySearchAndFilters(active, params, SEARCH_FIELDS);
+    let query = supabase.from('dokumente').select('*').is('deleted_at', null);
+
+    if (params?.filters) {
+      for (const [k, v] of Object.entries(params.filters)) {
+        if (v != null && v !== '') query = query.eq(k, v as any);
+      }
+    }
+
+    const term = (params?.search || '').toString().trim();
+    if (term) {
+      const like = `%${term}%`;
+      query = query.or(SEARCH_FIELDS.map((f) => `${String(f)}.ilike.${like}`).join(','));
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      console.error('dokumente.list error', error);
+      return [];
+    }
+    return (data as any[]) as Dokument[];
   },
+
   async get(id: string) {
-    return (await vermyDb.dokumente.get(id)) || null;
+    const { data, error } = await supabase.from('dokumente').select('*').eq('id', id).maybeSingle();
+    if (error) return null;
+    return data as any as Dokument;
   },
+
   async create(data) {
-    const now = new Date();
-    const size = (data as any).dateigröße || 0;
-    const item: Dokument = {
-      id: crypto.randomUUID(),
-      created_at: now,
-      updated_at: now,
-      version: 1,
-      titel: '',
-      kategorie: 'Sonstiges',
-      dateiname: 'datei',
-      dateipfad: '',
-      dateigröße: size,
-      ...data,
-    } as Dokument;
-    await vermyDb.dokumente.add(item);
-    return item;
+    const { data: row, error } = await supabase.from('dokumente').insert(data as any).select('*').single();
+    if (error) throw error;
+    return row as any as Dokument;
   },
+
   async update(id, data) {
-    const existing = await vermyDb.dokumente.get(id);
-    if (!existing) throw new Error('Nicht gefunden');
-    const updated: Dokument = { ...existing, ...data, updated_at: new Date(), version: (existing.version || 0) + 1 };
-    await vermyDb.dokumente.put(updated);
-    return updated;
+    const { data: row, error } = await supabase.from('dokumente').update({ ...data, updated_at: new Date().toISOString() } as any).eq('id', id).select('*').single();
+    if (error) throw error;
+    return row as any as Dokument;
   },
+
   async remove(id) {
-    // hard delete is acceptable for documents in MVP
-    await vermyDb.dokumente.delete(id);
+    // hard delete for documents
+    const { error } = await supabase.from('dokumente').delete().eq('id', id);
+    if (error) throw error;
   },
 };

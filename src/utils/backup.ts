@@ -1,4 +1,4 @@
-import { vermyDb } from '@/db/vermyDb';
+import { supabase } from '@/integrations/supabase/client';
 
 export type BackupBundle = {
   meta: { app: 'vermy'; version: number; exportedAt: string };
@@ -6,72 +6,54 @@ export type BackupBundle = {
     immobilien: any[];
     mieter: any[];
     finanzbuchungen: any[];
-    nebenkosten: any[];
     wartungMaengel: any[];
-    mahnwesen: any[];
     dokumente: any[];
     vertraege: any[];
-    versions: any[];
   };
 };
 
 export async function exportBackup(): Promise<BackupBundle> {
-  const [immobilien, mieter, finanzbuchungen, nebenkosten, wartungMaengel, mahnwesen, dokumente, vertraege, versions] =
-    await Promise.all([
-      vermyDb.immobilien.toArray(),
-      vermyDb.mieter.toArray(),
-      vermyDb.finanzbuchungen.toArray(),
-      vermyDb.nebenkosten.toArray(),
-      vermyDb.wartungMaengel.toArray(),
-      vermyDb.mahnwesen.toArray(),
-      vermyDb.dokumente.toArray(),
-      vermyDb.vertraege.toArray(),
-      vermyDb.versions.toArray(),
-    ]);
+  const [immos, mieter, buchungen, wartung, dokumente, vertraege] = await Promise.all([
+    supabase.from('immobilien').select('*'),
+    supabase.from('mieter').select('*'),
+    supabase.from('finanzbuchungen').select('*'),
+    supabase.from('wartung_maengel').select('*'),
+    supabase.from('dokumente').select('*'),
+    supabase.from('vertraege').select('*'),
+  ]);
 
   return {
     meta: { app: 'vermy', version: 1, exportedAt: new Date().toISOString() },
-    data: { immobilien, mieter, finanzbuchungen, nebenkosten, wartungMaengel, mahnwesen, dokumente, vertraege, versions },
+    data: {
+      immobilien: (immos.data || []) as any[],
+      mieter: (mieter.data || []) as any[],
+      finanzbuchungen: (buchungen.data || []) as any[],
+      wartungMaengel: (wartung.data || []) as any[],
+      dokumente: (dokumente.data || []) as any[],
+      vertraege: (vertraege.data || []) as any[],
+    },
   };
 }
 
 export async function importBackup(bundle: BackupBundle) {
   if (!bundle?.data) throw new Error('Ungültiges Backup');
-  await vermyDb.transaction('rw', [
-    vermyDb.immobilien,
-    vermyDb.mieter,
-    vermyDb.finanzbuchungen,
-    vermyDb.nebenkosten,
-    vermyDb.wartungMaengel,
-    vermyDb.mahnwesen,
-    vermyDb.dokumente,
-    vermyDb.vertraege,
-    vermyDb.versions,
-  ], async () => {
-    await Promise.all([
-      vermyDb.immobilien.clear(),
-      vermyDb.mieter.clear(),
-      vermyDb.finanzbuchungen.clear(),
-      vermyDb.nebenkosten.clear(),
-      vermyDb.wartungMaengel.clear(),
-      vermyDb.mahnwesen.clear(),
-      vermyDb.dokumente.clear(),
-      vermyDb.vertraege.clear(),
-      vermyDb.versions.clear(),
-    ]);
+  const d = bundle.data;
 
-    await Promise.all([
-      vermyDb.immobilien.bulkAdd(bundle.data.immobilien || []),
-      vermyDb.mieter.bulkAdd(bundle.data.mieter || []),
-      vermyDb.finanzbuchungen.bulkAdd(bundle.data.finanzbuchungen || []),
-      vermyDb.nebenkosten.bulkAdd(bundle.data.nebenkosten || []),
-      vermyDb.wartungMaengel.bulkAdd(bundle.data.wartungMaengel || []),
-      vermyDb.mahnwesen.bulkAdd(bundle.data.mahnwesen || []),
-      vermyDb.dokumente.bulkAdd(bundle.data.dokumente || []),
-      vermyDb.vertraege.bulkAdd(bundle.data.vertraege || []),
-      vermyDb.versions.bulkAdd(bundle.data.versions || [{ id: 'schema', version: 1 }]),
-    ]);
-  });
+  // Delete children first to avoid FK violations
+  await supabase.from('finanzbuchungen').delete().neq('id', '');
+  await supabase.from('wartung_maengel').delete().neq('id', '');
+  await supabase.from('dokumente').delete().neq('id', '');
+  await supabase.from('vertraege').delete().neq('id', '');
+  await supabase.from('mieter').delete().neq('id', '');
+  await supabase.from('immobilien').delete().neq('id', '');
+
+  // Insert parents first
+  if (d.immobilien?.length) await supabase.from('immobilien').insert(d.immobilien as any);
+  if (d.mieter?.length) await supabase.from('mieter').insert(d.mieter as any);
+  if (d.vertraege?.length) await supabase.from('vertraege').insert(d.vertraege as any);
+  if (d.finanzbuchungen?.length) await supabase.from('finanzbuchungen').insert(d.finanzbuchungen as any);
+  if (d.wartungMaengel?.length) await supabase.from('wartung_maengel').insert(d.wartungMaengel as any);
+  if (d.dokumente?.length) await supabase.from('dokumente').insert(d.dokumente as any);
 }
 
 export function downloadJSON(obj: any, filename: string) {
