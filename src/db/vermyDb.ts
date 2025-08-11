@@ -20,6 +20,7 @@ export class VermyDB extends Dexie {
   mahnwesen!: Table<Mahnwesen, string, Mahnwesen>;
   dokumente!: Table<Dokument, string, Dokument>;
   vertraege!: Table<Vertrag, string, Vertrag>;
+  versions!: Table<{ id: string; version: number }, string>;
 
   constructor() {
     super('vermyDB');
@@ -32,7 +33,8 @@ export class VermyDB extends Dexie {
       wartungMaengel: 'id, immobilie_id, mieter_id, status, prioritaet, beauftragt_am',
       mahnwesen: 'id, immobilie_id, mieter_id, finanzbuchung_id, status, mahnstufe',
       dokumente: 'id, immobilie_id, mieter_id, kategorie, created_at',
-      vertraege: 'id, immobilie_id, mieter_id, status, mietbeginn, mietende'
+      vertraege: 'id, immobilie_id, mieter_id, status, mietbeginn, mietende',
+      versions: 'id'
     });
   }
 }
@@ -56,6 +58,7 @@ export async function seedIfEmpty() {
       vermyDb.mahnwesen,
       vermyDb.dokumente,
       vermyDb.vertraege,
+      vermyDb.versions,
     ], async () => {
       await vermyDb.immobilien.bulkAdd(data.immobilien);
       await vermyDb.mieter.bulkAdd(data.mieter);
@@ -85,6 +88,7 @@ export async function seedIfEmpty() {
           mietvertrags_id: `MV-${String(idx+1).padStart(4,'0')}`
         }));
       await vermyDb.vertraege.bulkAdd(vertraege);
+      await vermyDb.versions.put({ id: 'schema', version: 1 });
     }
   );
 }

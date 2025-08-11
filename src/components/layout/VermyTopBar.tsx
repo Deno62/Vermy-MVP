@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Bell, User, Settings, LogOut } from 'lucide-react';
+import { Search, Bell, User, Settings, LogOut, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { LocalStorage, STORAGE_KEYS } from '@/utils/storage';
 import { Link, useNavigate } from 'react-router-dom';
 import { logout, getUser } from '@/auth/auth';
+import { globalSearch } from '@/repositories/searchRepository';
+import { exportBackup, downloadJSON, importBackup } from '@/utils/backup';
 
 interface VermyTopBarProps {
   currentModule: string;
@@ -19,6 +20,7 @@ export default function VermyTopBar({ currentModule, onSearch }: VermyTopBarProp
   const [results, setResults] = useState<{ label: string; to: string; meta?: string }[]>([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -39,11 +41,7 @@ export default function VermyTopBar({ currentModule, onSearch }: VermyTopBarProp
         setOpen(false);
         return;
       }
-      const [immos, mieter, vertraege] = await Promise.all([
-        LocalStorage.search<any>(STORAGE_KEYS.IMMOBILIEN, q, ['bezeichnung', 'adresse', 'ort'] as any),
-        LocalStorage.search<any>(STORAGE_KEYS.MIETER, q, ['vorname', 'nachname', 'email', 'telefon'] as any),
-        LocalStorage.search<any>(STORAGE_KEYS.VERTRAEGE, q, [] as any),
-      ]);
+      const { immobilien: immos, mieter, vertraege } = await globalSearch(q);
       const mapped: { label: string; to: string; meta?: string }[] = [];
       mapped.push(
         ...immos.slice(0, 5).map((i: any) => ({ label: `🏢 ${i.bezeichnung}`, to: `/immobilien`, meta: i.adresse })),
