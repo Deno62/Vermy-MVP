@@ -10,7 +10,8 @@ import {
   FileText,
   LayoutDashboard,
   Menu,
-  X
+  X,
+  FileSignature
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,12 @@ const navigationItems = [
     url: '/mieter',
     icon: Users,
     description: 'Mieterverwaltung'
+  },
+  {
+    title: 'Verträge',
+    url: '/vertraege',
+    icon: FileSignature,
+    description: 'Mietverträge verwalten'
   },
   {
     title: 'Finanzen',

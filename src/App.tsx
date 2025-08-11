@@ -6,12 +6,15 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import VermyLayout from "./components/layout/VermyLayout";
 import DashboardPage from "./pages/DashboardPage";
 import ImmobilienPage from "./pages/ImmobilienPage";
+import ImmobilieDetailPage from "./pages/ImmobilieDetailPage";
 import MieterPage from "./pages/MieterPage";
 import FinanzenPage from "./pages/FinanzenPage";
 import NebenkostenPage from "./pages/NebenkostenPage";
 import WartungPage from "./pages/WartungPage";
 import MahnwesenPage from "./pages/MahnwesenPage";
 import DokumentePage from "./pages/DokumentePage";
+import VertraegePage from "./pages/VertraegePage";
+import VertragDetailPage from "./pages/VertragDetailPage";
 import NotFound from "./pages/NotFound";
 import LoginPage from "./components/auth/LoginPage";
 import ErrorBoundary from "./components/common/ErrorBoundary";
@@ -55,6 +58,7 @@ const App = () => (
               }
             >
               <Route index element={<ImmobilienPage />} />
+              <Route path=":id" element={<ImmobilieDetailPage />} />
             </Route>
             <Route
               path="/mieter"
@@ -115,6 +119,17 @@ const App = () => (
               }
             >
               <Route index element={<DokumentePage />} />
+            </Route>
+            <Route
+              path="/vertraege"
+              element={
+                <RequireAuth>
+                  <VermyLayout currentModule="Verträge" />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<VertraegePage />} />
+              <Route path=":id" element={<VertragDetailPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
