@@ -23,6 +23,8 @@ export interface Immobilie extends BaseEntity {
   status: 'Verfügbar' | 'Vermietet' | 'Wartung' | 'Leerstand';
   beschreibung?: string;
   energieausweis?: string;
+  // Parent/Child hierarchy: Wohnung -> Haus
+  parent_id?: string | null;
 }
 
 export interface Mieter extends BaseEntity {
@@ -48,6 +50,7 @@ export interface Finanzbuchung extends BaseEntity {
   beschreibung: string;
   referenz?: string;
   status: 'Offen' | 'Bezahlt' | 'Überfällig' | 'Storniert';
+  bezahlt_am?: Date; // gesetzt wenn status = 'Bezahlt'
 }
 
 export interface Nebenkosten extends BaseEntity {
@@ -76,6 +79,7 @@ export interface WartungMaengel extends BaseEntity {
   kosten_tatsaechlich?: number;
   beauftragt_am?: Date;
   erledigt_am?: Date;
+  faellig_am?: Date;
 }
 
 export interface Mahnwesen extends BaseEntity {

@@ -88,6 +88,7 @@ export type Database = {
           art: string
           beschreibung: string
           betrag: number
+          bezahlt_am: string | null
           created_at: string
           datum: string
           deleted_at: string | null
@@ -104,6 +105,7 @@ export type Database = {
           art: string
           beschreibung: string
           betrag: number
+          bezahlt_am?: string | null
           created_at?: string
           datum: string
           deleted_at?: string | null
@@ -120,6 +122,7 @@ export type Database = {
           art?: string
           beschreibung?: string
           betrag?: number
+          bezahlt_am?: string | null
           created_at?: string
           datum?: string
           deleted_at?: string | null
@@ -165,6 +168,7 @@ export type Database = {
           kaution: number | null
           nebenkosten: number | null
           ort: string | null
+          parent_id: string | null
           plz: string | null
           status: string
           updated_at: string
@@ -186,6 +190,7 @@ export type Database = {
           kaution?: number | null
           nebenkosten?: number | null
           ort?: string | null
+          parent_id?: string | null
           plz?: string | null
           status: string
           updated_at?: string
@@ -207,13 +212,22 @@ export type Database = {
           kaution?: number | null
           nebenkosten?: number | null
           ort?: string | null
+          parent_id?: string | null
           plz?: string | null
           status?: string
           updated_at?: string
           version?: number
           zimmer?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "immobilien_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "immobilien"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mieter: {
         Row: {
@@ -366,6 +380,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           erledigt_am: string | null
+          faellig_am: string | null
           id: string
           immobilie_id: string
           kategorie: string
@@ -384,6 +399,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           erledigt_am?: string | null
+          faellig_am?: string | null
           id?: string
           immobilie_id: string
           kategorie: string
@@ -402,6 +418,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           erledigt_am?: string | null
+          faellig_am?: string | null
           id?: string
           immobilie_id?: string
           kategorie?: string
