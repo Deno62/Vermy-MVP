@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import JSZip from 'jszip';
 
 export type BackupBundle = {
   meta: { app: 'vermy'; version: number; exportedAt: string };
@@ -120,4 +121,56 @@ export function downloadJSON(obj: any, filename: string) {
   dlAnchor.setAttribute('href', dataStr);
   dlAnchor.setAttribute('download', filename);
   dlAnchor.click();
+}
+
+// Export backup as a ZIP file (includes JSON bundle and, if available, document files)
+export async function exportBackupZip(
+  onProgress?: (step: string, progress: number) => void
+): Promise<Blob> {
+  const bundle = await exportBackup((step, progress) => {
+    onProgress?.(step, Math.min(0.9, progress * 0.9));
+  });
+
+  onProgress?.('prepare_zip', 0.9);
+  const zip = new JSZip();
+
+  // Add the full JSON bundle
+  zip.file('vermy-backup.json', JSON.stringify(bundle, null, 2));
+
+  // Optionally include document files if base64 content is present
+  const docs = (bundle.data?.dokumente || []) as any[];
+  let processed = 0;
+  for (const doc of docs) {
+    const name: string = doc.dateiname || doc.name || `dokument-${doc.id || processed}`;
+    const base64: string | undefined = doc.content_base64 || doc.data_base64;
+    if (base64 && typeof base64 === 'string') {
+      const b64 = base64.includes(',') ? base64.split(',')[1] : base64;
+      zip.file(`dokumente/${name}`, b64, { base64: true });
+    }
+    processed++;
+  }
+
+  onProgress?.('zipping', 0.96);
+  const blob = await zip.generateAsync({ type: 'blob' });
+  onProgress?.('done', 1);
+  return blob;
+}
+
+export async function exportAndDownloadZip(
+  onProgress?: (step: string, progress: number) => void
+) {
+  const blob = await exportBackupZip(onProgress);
+  const date = new Date().toISOString().slice(0, 10);
+  downloadBlob(blob, `vermy-backup-${date}.zip`);
+}
+
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
