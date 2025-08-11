@@ -1,7 +1,11 @@
-import { Search, Bell, User, Settings } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Search, Bell, User, Settings, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { LocalStorage, STORAGE_KEYS } from '@/utils/storage';
+import { Link, useNavigate } from 'react-router-dom';
+import { logout, getUser } from '@/auth/auth';
 
 interface VermyTopBarProps {
   currentModule: string;
@@ -9,6 +13,54 @@ interface VermyTopBarProps {
 }
 
 export default function VermyTopBar({ currentModule, onSearch }: VermyTopBarProps) {
+  const navigate = useNavigate();
+  const user = getUser();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<{ label: string; to: string; meta?: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener('click', handler);
+    return () => window.removeEventListener('click', handler);
+  }, []);
+
+  useEffect(() => {
+    onSearch?.(query);
+    const run = async () => {
+      const q = query.trim().toLowerCase();
+      if (q.length < 2) {
+        setResults([]);
+        setOpen(false);
+        return;
+      }
+      const [immos, mieter, vertraege] = await Promise.all([
+        LocalStorage.search<any>(STORAGE_KEYS.IMMOBILIEN, q, ['bezeichnung', 'adresse', 'ort'] as any),
+        LocalStorage.search<any>(STORAGE_KEYS.MIETER, q, ['vorname', 'nachname', 'email', 'telefon'] as any),
+        LocalStorage.search<any>(STORAGE_KEYS.VERTRAEGE, q, [] as any),
+      ]);
+      const mapped: { label: string; to: string; meta?: string }[] = [];
+      mapped.push(
+        ...immos.slice(0, 5).map((i: any) => ({ label: `🏢 ${i.bezeichnung}`, to: `/immobilien`, meta: i.adresse })),
+        ...mieter.slice(0, 5).map((m: any) => ({ label: `👤 ${m.anrede} ${m.vorname} ${m.nachname}`, to: `/mieter`, meta: m.email })),
+        ...vertraege.slice(0, 5).map((v: any) => ({ label: `📄 Vertrag ${v.mietvertrags_id || v.id.slice(0,6)}`, to: `/finanzen`, meta: v.status }))
+      );
+      setResults(mapped);
+      setOpen(mapped.length > 0);
+    };
+    run();
+  }, [query]);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <header className="bg-crm-topbar border-b border-border h-16 flex items-center justify-between px-6 shadow-sm">
       {/* Left section - Current module */}
@@ -17,14 +69,30 @@ export default function VermyTopBar({ currentModule, onSearch }: VermyTopBarProp
       </div>
 
       {/* Center section - Search */}
-      <div className="flex-1 max-w-md mx-8">
+      <div className="flex-1 max-w-md mx-8" ref={containerRef}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Suchen..."
+            placeholder="Global suchen…"
             className="pl-10 bg-background border-border"
-            onChange={(e) => onSearch?.(e.target.value)}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => results.length && setOpen(true)}
           />
+          {open && results.length > 0 && (
+            <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
+              <ul className="max-h-64 overflow-auto">
+                {results.map((r, idx) => (
+                  <li key={idx} className="border-b last:border-b-0">
+                    <Link to={r.to} onClick={() => setOpen(false)} className="block px-3 py-2 hover:bg-muted">
+                      <div className="text-sm">{r.label}</div>
+                      {r.meta && <div className="text-xs text-muted-foreground">{r.meta}</div>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 
@@ -39,14 +107,18 @@ export default function VermyTopBar({ currentModule, onSearch }: VermyTopBarProp
         </Button>
 
         {/* Settings */}
-        <Button variant="ghost" size="sm">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/einstellungen')}>
           <Settings className="h-4 w-4" />
         </Button>
 
         {/* User Profile */}
         <Button variant="ghost" size="sm" className="flex items-center space-x-2">
           <User className="h-4 w-4" />
-          <span className="hidden md:inline text-sm">Admin</span>
+          <span className="hidden md:inline text-sm">{user?.name || 'Benutzer'}</span>
+        </Button>
+
+        <Button variant="outline" size="sm" onClick={handleLogout}>
+          <LogOut className="h-4 w-4 mr-2" /> Abmelden
         </Button>
       </div>
     </header>
