@@ -14,7 +14,423 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      dokumente: {
+        Row: {
+          content_base64: string | null
+          created_at: string
+          dateigröße: number | null
+          dateiname: string | null
+          dateipfad: string | null
+          deleted_at: string | null
+          id: string
+          immobilie_id: string | null
+          kategorie: string
+          mieter_id: string | null
+          notizen: string | null
+          titel: string
+          updated_at: string
+          version: number
+          vertrag_id: string | null
+        }
+        Insert: {
+          content_base64?: string | null
+          created_at?: string
+          dateigröße?: number | null
+          dateiname?: string | null
+          dateipfad?: string | null
+          deleted_at?: string | null
+          id?: string
+          immobilie_id?: string | null
+          kategorie: string
+          mieter_id?: string | null
+          notizen?: string | null
+          titel: string
+          updated_at?: string
+          version?: number
+          vertrag_id?: string | null
+        }
+        Update: {
+          content_base64?: string | null
+          created_at?: string
+          dateigröße?: number | null
+          dateiname?: string | null
+          dateipfad?: string | null
+          deleted_at?: string | null
+          id?: string
+          immobilie_id?: string | null
+          kategorie?: string
+          mieter_id?: string | null
+          notizen?: string | null
+          titel?: string
+          updated_at?: string
+          version?: number
+          vertrag_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dokumente_immobilie_id_fkey"
+            columns: ["immobilie_id"]
+            isOneToOne: false
+            referencedRelation: "immobilien"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dokumente_mieter_id_fkey"
+            columns: ["mieter_id"]
+            isOneToOne: false
+            referencedRelation: "mieter"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finanzbuchungen: {
+        Row: {
+          art: string
+          beschreibung: string
+          betrag: number
+          created_at: string
+          datum: string
+          deleted_at: string | null
+          id: string
+          immobilie_id: string
+          kategorie: string
+          mieter_id: string | null
+          referenz: string | null
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          art: string
+          beschreibung: string
+          betrag: number
+          created_at?: string
+          datum: string
+          deleted_at?: string | null
+          id?: string
+          immobilie_id: string
+          kategorie: string
+          mieter_id?: string | null
+          referenz?: string | null
+          status: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          art?: string
+          beschreibung?: string
+          betrag?: number
+          created_at?: string
+          datum?: string
+          deleted_at?: string | null
+          id?: string
+          immobilie_id?: string
+          kategorie?: string
+          mieter_id?: string | null
+          referenz?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finanzbuchungen_immobilie_id_fkey"
+            columns: ["immobilie_id"]
+            isOneToOne: false
+            referencedRelation: "immobilien"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finanzbuchungen_mieter_id_fkey"
+            columns: ["mieter_id"]
+            isOneToOne: false
+            referencedRelation: "mieter"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      immobilien: {
+        Row: {
+          adresse: string
+          art: string
+          baujahr: number | null
+          beschreibung: string | null
+          bezeichnung: string
+          created_at: string
+          deleted_at: string | null
+          energieausweis: string | null
+          flaeche: number | null
+          id: string
+          kaltmiete: number | null
+          kaution: number | null
+          nebenkosten: number | null
+          ort: string | null
+          plz: string | null
+          status: string
+          updated_at: string
+          version: number
+          zimmer: number
+        }
+        Insert: {
+          adresse: string
+          art: string
+          baujahr?: number | null
+          beschreibung?: string | null
+          bezeichnung: string
+          created_at?: string
+          deleted_at?: string | null
+          energieausweis?: string | null
+          flaeche?: number | null
+          id?: string
+          kaltmiete?: number | null
+          kaution?: number | null
+          nebenkosten?: number | null
+          ort?: string | null
+          plz?: string | null
+          status: string
+          updated_at?: string
+          version?: number
+          zimmer: number
+        }
+        Update: {
+          adresse?: string
+          art?: string
+          baujahr?: number | null
+          beschreibung?: string | null
+          bezeichnung?: string
+          created_at?: string
+          deleted_at?: string | null
+          energieausweis?: string | null
+          flaeche?: number | null
+          id?: string
+          kaltmiete?: number | null
+          kaution?: number | null
+          nebenkosten?: number | null
+          ort?: string | null
+          plz?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+          zimmer?: number
+        }
+        Relationships: []
+      }
+      mieter: {
+        Row: {
+          anrede: string
+          auszugsdatum: string | null
+          created_at: string
+          deleted_at: string | null
+          einzugsdatum: string | null
+          email: string
+          id: string
+          immobilie_id: string | null
+          nachname: string
+          notizen: string | null
+          status: string
+          telefon: string
+          updated_at: string
+          version: number
+          vorname: string
+        }
+        Insert: {
+          anrede: string
+          auszugsdatum?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          einzugsdatum?: string | null
+          email: string
+          id?: string
+          immobilie_id?: string | null
+          nachname: string
+          notizen?: string | null
+          status: string
+          telefon: string
+          updated_at?: string
+          version?: number
+          vorname: string
+        }
+        Update: {
+          anrede?: string
+          auszugsdatum?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          einzugsdatum?: string | null
+          email?: string
+          id?: string
+          immobilie_id?: string | null
+          nachname?: string
+          notizen?: string | null
+          status?: string
+          telefon?: string
+          updated_at?: string
+          version?: number
+          vorname?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mieter_immobilie_id_fkey"
+            columns: ["immobilie_id"]
+            isOneToOne: false
+            referencedRelation: "immobilien"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vertraege: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          dokument_id: string | null
+          id: string
+          immobilie_id: string
+          kaltmiete: number
+          kuendigungsfrist: string
+          mietbeginn: string
+          mietende: string | null
+          mieter_id: string
+          mietvertrags_id: string
+          nebenkosten: number
+          notizen: string | null
+          status: string
+          updated_at: string
+          version: number
+          zahlungsintervall: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          dokument_id?: string | null
+          id?: string
+          immobilie_id: string
+          kaltmiete: number
+          kuendigungsfrist: string
+          mietbeginn: string
+          mietende?: string | null
+          mieter_id: string
+          mietvertrags_id: string
+          nebenkosten: number
+          notizen?: string | null
+          status: string
+          updated_at?: string
+          version?: number
+          zahlungsintervall: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          dokument_id?: string | null
+          id?: string
+          immobilie_id?: string
+          kaltmiete?: number
+          kuendigungsfrist?: string
+          mietbeginn?: string
+          mietende?: string | null
+          mieter_id?: string
+          mietvertrags_id?: string
+          nebenkosten?: number
+          notizen?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+          zahlungsintervall?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vertraege_dokument_id_fkey"
+            columns: ["dokument_id"]
+            isOneToOne: false
+            referencedRelation: "dokumente"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vertraege_immobilie_id_fkey"
+            columns: ["immobilie_id"]
+            isOneToOne: false
+            referencedRelation: "immobilien"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vertraege_mieter_id_fkey"
+            columns: ["mieter_id"]
+            isOneToOne: false
+            referencedRelation: "mieter"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wartung_maengel: {
+        Row: {
+          beauftragt_am: string | null
+          beschreibung: string | null
+          created_at: string
+          deleted_at: string | null
+          erledigt_am: string | null
+          id: string
+          immobilie_id: string
+          kategorie: string
+          kosten_geschaetzt: number | null
+          kosten_tatsaechlich: number | null
+          mieter_id: string | null
+          prioritaet: string
+          status: string
+          titel: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          beauftragt_am?: string | null
+          beschreibung?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          erledigt_am?: string | null
+          id?: string
+          immobilie_id: string
+          kategorie: string
+          kosten_geschaetzt?: number | null
+          kosten_tatsaechlich?: number | null
+          mieter_id?: string | null
+          prioritaet: string
+          status: string
+          titel: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          beauftragt_am?: string | null
+          beschreibung?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          erledigt_am?: string | null
+          id?: string
+          immobilie_id?: string
+          kategorie?: string
+          kosten_geschaetzt?: number | null
+          kosten_tatsaechlich?: number | null
+          mieter_id?: string | null
+          prioritaet?: string
+          status?: string
+          titel?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wartung_maengel_immobilie_id_fkey"
+            columns: ["immobilie_id"]
+            isOneToOne: false
+            referencedRelation: "immobilien"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wartung_maengel_mieter_id_fkey"
+            columns: ["mieter_id"]
+            isOneToOne: false
+            referencedRelation: "mieter"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
