@@ -3,8 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import DataTable from '@/components/common/DataTable';
 import { Mieter, Immobilie } from '@/types/entities';
 import { User, Mail, Phone, Building2 } from 'lucide-react';
-import { mieterRepository } from '@/repositories/mieterRepository';
-import { immobilienRepository } from '@/repositories/immobilienRepository';
+import { mieterRepo } from '@/repositories/mieterRepo';
+import { immobilienRepo } from '@/repositories/immobilienRepo';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const schema = z.object({
   anrede: z.enum(['Herr','Frau','Divers'], { required_error: 'Anrede ist erforderlich' }),
@@ -21,6 +22,7 @@ const schema = z.object({
   email: z.string().email('Ungültige E-Mail'),
   telefon: z.string().min(3, 'Telefon ist erforderlich'),
   immobilie_id: z.string().optional(),
+  hauptmieter: z.boolean().default(false).optional(),
   status: z.enum(['Aktiv','Ausgezogen','Gekündigt'], { required_error: 'Status ist erforderlich' }),
 });
 
@@ -35,7 +37,7 @@ const MieterPage = () => {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { anrede: 'Herr', vorname: '', nachname: '', email: '', telefon: '', immobilie_id: undefined, status: 'Aktiv' },
+    defaultValues: { anrede: 'Herr', vorname: '', nachname: '', email: '', telefon: '', immobilie_id: undefined, hauptmieter: false, status: 'Aktiv' },
   });
 
   useEffect(() => {
@@ -44,7 +46,7 @@ const MieterPage = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const [immos, ms] = await Promise.all([immobilienRepository.list(), mieterRepository.list()]);
+    const [immos, ms] = await Promise.all([immobilienRepo.list(), mieterRepo.list()]);
     setImmobilien(immos);
     setMieter(ms);
     setLoading(false);
@@ -52,7 +54,7 @@ const MieterPage = () => {
 
   const handleAdd = () => {
     setEditing(null);
-    form.reset({ anrede: 'Herr', vorname: '', nachname: '', email: '', telefon: '', immobilie_id: undefined, status: 'Aktiv' });
+    form.reset({ anrede: 'Herr', vorname: '', nachname: '', email: '', telefon: '', immobilie_id: undefined, hauptmieter: false, status: 'Aktiv' });
     setOpen(true);
   };
 
@@ -65,6 +67,7 @@ const MieterPage = () => {
       email: (m as any).email || '',
       telefon: (m as any).telefon || '',
       immobilie_id: (m as any).immobilie_id,
+      hauptmieter: !!(m as any).hauptmieter,
       status: (m as any).status || 'Aktiv',
     });
     setOpen(true);
@@ -72,9 +75,9 @@ const MieterPage = () => {
 
   const onSubmit = async (values: FormValues) => {
     if (editing) {
-      await mieterRepository.update(editing.id, { ...values, updated_at: new Date() } as any);
+      await mieterRepo.update(editing.id, { ...values, updated_at: new Date() } as any);
     } else {
-      await mieterRepository.create(values as any);
+      await mieterRepo.create(values as any);
     }
     setOpen(false);
     setEditing(null);
@@ -83,7 +86,7 @@ const MieterPage = () => {
 
   const handleDelete = async (m: Mieter) => {
     if (confirm(`Möchten Sie den Mieter "${(m as any).vorname} ${(m as any).nachname}" wirklich löschen?`)) {
-      await mieterRepository.remove(m.id);
+      await mieterRepo.remove(m.id);
       loadData();
     }
   };
@@ -262,6 +265,16 @@ const MieterPage = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="hauptmieter" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Hauptmieter</FormLabel>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox checked={!!field.value} onCheckedChange={(v) => field.onChange(!!v)} />
+                      <span className="text-sm text-muted-foreground">Genau ein Hauptmieter pro Wohnung</span>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )} />

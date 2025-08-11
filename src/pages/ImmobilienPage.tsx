@@ -61,6 +61,16 @@ const ImmobilienPage = () => {
     setLoading(false);
   };
 
+  const loadHaeuser = async () => {
+    try {
+      const hs = await immobilienRepo.listHaeuser();
+      setHaeuser(Array.isArray(hs) ? hs : []);
+    } catch (e) {
+      console.error(e);
+      setHaeuser([]);
+    }
+  };
+
   const handleAdd = () => {
     setEditing(null);
     form.reset({ bezeichnung: '', adresse: '', plz: '', ort: '', typ: 'Wohnung', parent_id: null, art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar' });

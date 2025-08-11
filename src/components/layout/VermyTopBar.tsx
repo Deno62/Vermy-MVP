@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate } from 'react-router-dom';
 import { logout, getUser } from '@/auth/auth';
-import { globalSearch } from '@/repositories/searchRepository';
+import { globalSearchCompact } from '@/services/globalSearch';
 import { exportBackup, downloadJSON, importBackup } from '@/utils/backup';
 
 interface VermyTopBarProps {
@@ -41,13 +41,12 @@ export default function VermyTopBar({ currentModule, onSearch }: VermyTopBarProp
         setOpen(false);
         return;
       }
-      const { immobilien: immos, mieter, vertraege } = await globalSearch(q);
-      const mapped: { label: string; to: string; meta?: string }[] = [];
-      mapped.push(
-        ...immos.slice(0, 5).map((i: any) => ({ label: `🏢 ${i.bezeichnung}`, to: `/immobilien`, meta: i.adresse })),
-        ...mieter.slice(0, 5).map((m: any) => ({ label: `👤 ${m.anrede} ${m.vorname} ${m.nachname}`, to: `/mieter`, meta: m.email })),
-        ...vertraege.slice(0, 5).map((v: any) => ({ label: `📄 Vertrag ${v.mietvertrags_id || v.id.slice(0,6)}`, to: `/finanzen`, meta: v.status }))
-      );
+      const compact = await globalSearchCompact(q);
+      const mapped: { label: string; to: string; meta?: string }[] = compact.map((r) => ({
+        label: `${r.type === 'Immobilie' ? '🏢' : r.type === 'Mieter' ? '👤' : '📄'} ${r.title}`,
+        to: r.route || '/',
+        meta: r.subtitle,
+      }));
       setResults(mapped);
       setOpen(mapped.length > 0);
     };

@@ -4,8 +4,8 @@ import DataTable from '@/components/common/DataTable';
 import { Dokument, Immobilie, Mieter } from '@/types/entities';
 import { FileText, Building2, User, Download } from 'lucide-react';
 import { dokumentRepository } from '@/repositories/dokumentRepository';
-import { immobilienRepository } from '@/repositories/immobilienRepository';
-import { mieterRepository } from '@/repositories/mieterRepository';
+import { immobilienRepo } from '@/repositories/immobilienRepo';
+import { mieterRepo } from '@/repositories/mieterRepo';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -62,8 +62,8 @@ const DokumentePage = () => {
   const loadData = async () => {
     setLoading(true);
     const [immos, mit, docs] = await Promise.all([
-      immobilienRepository.list(),
-      mieterRepository.list(),
+      immobilienRepo.list(),
+      mieterRepo.list(),
       dokumentRepository.list(),
     ]);
     setImmobilien(immos);

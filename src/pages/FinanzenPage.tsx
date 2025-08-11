@@ -4,7 +4,7 @@ import DataTable from '@/components/common/DataTable';
 import { Finanzbuchung, Immobilie } from '@/types/entities';
 import { Euro, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 import { zahlungRepository } from '@/repositories/zahlungRepository';
-import { immobilienRepository } from '@/repositories/immobilienRepository';
+import { immobilienRepo } from '@/repositories/immobilienRepo';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +44,7 @@ const FinanzenPage = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const [immos, data] = await Promise.all([immobilienRepository.list(), zahlungRepository.list()]);
+    const [immos, data] = await Promise.all([immobilienRepo.list(), zahlungRepository.list()]);
     setImmobilien(immos);
     setBuchungen(data);
     setLoading(false);

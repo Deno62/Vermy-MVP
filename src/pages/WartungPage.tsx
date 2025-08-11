@@ -3,8 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import DataTable from '@/components/common/DataTable';
 import { WartungMaengel, Immobilie } from '@/types/entities';
 import { Wrench, Building2, AlertTriangle, CheckCircle } from 'lucide-react';
-import { wartungRepository } from '@/repositories/wartungRepository';
-import { immobilienRepository } from '@/repositories/immobilienRepository';
+import { wartungRepo } from '@/repositories/wartungRepo';
+import { immobilienRepo } from '@/repositories/immobilienRepo';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +44,7 @@ const WartungPage = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const [immos, data] = await Promise.all([immobilienRepository.list(), wartungRepository.list()]);
+    const [immos, data] = await Promise.all([immobilienRepo.list(), wartungRepo.list()]);
     setImmobilien(immos);
     setWartungen(data);
     setLoading(false);
@@ -72,9 +72,9 @@ const WartungPage = () => {
 
   const onSubmit = async (values: FormValues) => {
     if (editing) {
-      await wartungRepository.update(editing.id, { ...values, updated_at: new Date() } as any);
+      await wartungRepo.update(editing.id, { ...values, updated_at: new Date() } as any);
     } else {
-      await wartungRepository.create(values as any);
+      await wartungRepo.create(values as any);
     }
     setOpen(false);
     setEditing(null);
@@ -83,7 +83,7 @@ const WartungPage = () => {
 
   const handleDelete = async (w: WartungMaengel) => {
     if (confirm(`Möchten Sie den Eintrag "${(w as any).titel}" wirklich löschen?`)) {
-      await wartungRepository.remove(w.id);
+      await wartungRepo.remove(w.id);
       loadData();
     }
   };
