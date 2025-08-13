@@ -1,417 +1,294 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import DataTable from '@/components/common/DataTable';
-import { Immobilie } from '@/types/entities';
-import { Building2, MapPin, Users } from 'lucide-react';
-import { immobilienRepo } from '@/repositories/immobilienRepo';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useNavigate } from 'react-router-dom';
-import { useToast } from '@/hooks/use-toast';
-const schema = z.object({
-  bezeichnung: z.string().min(1, 'Bezeichnung ist erforderlich'),
-  adresse: z.string().min(1, 'Adresse ist erforderlich'),
-  plz: z.string().optional(),
-  ort: z.string().optional(),
-  typ: z.enum(['Haus','Wohnung'], { required_error: 'Typ ist erforderlich' }),
-  parent_id: z.string().optional().nullable(),
-  art: z.enum(['Wohnung', 'Haus', 'Gewerbe', 'Garage', 'Sonstiges'], { required_error: 'Art ist erforderlich' }),
-  zimmer: z.coerce.number().int().min(1, 'Mindestens 1 Zimmer'),
-  flaeche: z.coerce.number().min(0, 'Ungültige Fläche'),
-  kaltmiete: z.coerce.number().min(0, 'Ungültige Kaltmiete').optional(),
-  status: z.enum(['Verfügbar', 'Vermietet', 'Wartung', 'Leerstand']),
-}).superRefine((val, ctx) => {
-  if (val.typ === 'Wohnung' && (!val.parent_id || val.parent_id.length === 0)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['parent_id'], message: 'Bitte wählen Sie ein Parent-Haus' });
+import { useEffect, useMemo, useState } from "react";
+import { immobilienRepo } from "@/repositories/immobilienRepo"; // ✅ named export nutzen
+
+type Immobilie = {
+  id: string;
+  bezeichnung: string;
+  typ: "Haus" | "Wohnung";
+  status?: string;
+  parent_id?: string | null;
+  adresse?: string;
+  zimmer?: number;
+  flaeche_qm?: number;
+  kaltmiete?: number;
+};
+
+export default function ImmobilienPage() {
+  const [rows, setRows] = useState<Immobilie[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Dialog + Form
+  const [showDialog, setShowDialog] = useState(false);
+  const [form, setForm] = useState<Partial<Immobilie>>({
+    typ: "Haus",
+    status: "frei",
+  });
+
+  // Haus-Auswahl für Wohnungen
+  const [hausOptions, setHausOptions] = useState<Immobilie[]>([]);
+  const isWohnung = useMemo(() => form.typ === "Wohnung", [form.typ]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      // Alle Immobilien
+      const list = await immobilienRepo.list();
+      setRows(list);
+
+      // Nur Häuser als Parent-Optionen
+      const haeuser = await immobilienRepo.list({ typ: "Haus", parentId: null });
+      setHausOptions(haeuser);
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Laden der Immobilien.");
+    } finally {
+      setLoading(false);
+    }
   }
-});
-
-type FormValues = z.infer<typeof schema>;
-
-const ImmobilienPage = () => {
-  const [immobilien, setImmobilien] = useState<Immobilie[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Immobilie | null>(null);
-  const [haeuser, setHaeuser] = useState<any[]>([]);
-
-const navigate = useNavigate();
-const { toast } = useToast();
-
-const form = useForm<FormValues>({
-  resolver: zodResolver(schema),
-  defaultValues: {
-    bezeichnung: '', adresse: '', plz: '', ort: '', typ: 'Wohnung', parent_id: null, art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar',
-  },
-});
 
   useEffect(() => {
-    loadImmobilien();
-    loadHaeuser();
+    load();
   }, []);
 
-  const loadImmobilien = async () => {
-    setLoading(true);
-    const data = await immobilienRepo.list();
-    setImmobilien(Array.isArray(data) ? data : []);
-    setLoading(false);
-  };
-
-const loadHaeuser = async () => {
-  try {
-    const hs = await immobilienRepo.listHaeuser();
-    setHaeuser(Array.isArray(hs) ? hs : []);
-  } catch (e: any) {
-    setHaeuser([]);
-    toast({ title: 'Fehler', description: 'Häuser konnten nicht geladen werden.', variant: 'destructive' });
-  }
-};
-
-  const handleAdd = () => {
-    setEditing(null);
-    form.reset({ bezeichnung: '', adresse: '', plz: '', ort: '', typ: 'Wohnung', parent_id: null, art: 'Wohnung', zimmer: 1, flaeche: 30, kaltmiete: 0, status: 'Verfügbar' });
-    setOpen(true);
-  };
-
-  const handleEdit = (immobilie: Immobilie) => {
-    setEditing(immobilie);
-    form.reset({
-      bezeichnung: immobilie.bezeichnung,
-      adresse: immobilie.adresse,
-      plz: (immobilie as any).plz || '',
-      ort: (immobilie as any).ort || '',
-      typ: ((immobilie as any).typ as any) || 'Wohnung',
-      parent_id: (immobilie as any).parent_id ?? null,
-      art: (immobilie as any).art as any,
-      zimmer: immobilie.zimmer || 1,
-      flaeche: (immobilie as any).flaeche || 0,
-      kaltmiete: (immobilie as any).kaltmiete || 0,
-      status: immobilie.status as any,
-    });
-    setOpen(true);
-  };
-
-const onSubmit = async (values: FormValues) => {
-  const payload = {
-    bezeichnung: values.bezeichnung,
-    adresse: values.adresse,
-    typ: values.typ,
-    zimmer: values.zimmer,
-    flaeche: (values as any).flaeche ?? (values as any).flaeche_qm ?? (values as any).flaecheQm,
-    kaltmiete: values.kaltmiete,
-    status: values.status,
-    parent_id: values.typ === 'Haus' ? null : values.parent_id ?? null,
-    // art intentionally preserved for compatibility if present in DB
-    art: (values as any).art,
-  } as any;
-
-  try {
-    let saved: any;
-    if (editing) {
-      saved = await immobilienRepo.update(editing.id, payload);
-      toast({ title: 'Gespeichert', description: 'Immobilie aktualisiert.' });
-    } else {
-      saved = await immobilienRepo.create(payload);
-      toast({ title: 'Angelegt', description: 'Immobilie wurde erstellt.' });
+  // Falls der Typ im Formular auf "Haus" wechselt → parent_id leeren
+  useEffect(() => {
+    if (!isWohnung && form.parent_id) {
+      setForm((f) => ({ ...f, parent_id: null }));
     }
-    setOpen(false);
-    setEditing(null);
-    await loadImmobilien();
-    if (saved && saved.id && !editing) {
-      navigate(`/immobilien/${saved.id}`);
-    }
-  } catch (e: any) {
-    const message = e?.message || e?.error?.message || 'Speichern fehlgeschlagen.';
-    toast({ title: 'Fehler beim Speichern', description: message, variant: 'destructive' });
-  }
-};
+  }, [isWohnung, form.parent_id]);
 
-const handleDelete = async (immobilie: Immobilie) => {
-  if (confirm(`Möchten Sie die Immobilie "${immobilie.bezeichnung}" wirklich löschen?`)) {
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
     try {
-      await immobilienRepo.remove(immobilie.id);
-      toast({ title: 'Gelöscht', description: 'Immobilie wurde gelöscht.' });
-      await loadImmobilien();
-    } catch (e: any) {
-      const message = e?.message || e?.error?.message || 'Löschen fehlgeschlagen.';
-      toast({ title: 'Fehler', description: message, variant: 'destructive' });
+      const payload: any = {
+        bezeichnung: (form.bezeichnung || "").trim() || "Ohne Titel",
+        typ: form.typ || "Haus",
+        status: form.status || "frei",
+        // Nur für Wohnung parent_id setzen
+        parent_id: form.typ === "Wohnung" ? (form.parent_id || null) : null,
+        adresse: form.adresse || "",
+        zimmer: form.zimmer ? Number(form.zimmer) : undefined,
+        flaeche_qm: form.flaeche_qm ? Number(form.flaeche_qm) : undefined,
+        kaltmiete: form.kaltmiete ? Number(form.kaltmiete) : undefined,
+      };
+
+      // Validierung: Wohnung braucht ein Parent-Haus
+      if (payload.typ === "Wohnung" && !payload.parent_id) {
+        alert("Bitte ein Parent-Haus auswählen.");
+        return;
+      }
+
+      await immobilienRepo.create(payload);
+      setShowDialog(false);
+      setForm({ typ: "Haus", status: "frei" });
+      await load();
+    } catch (e) {
+      console.error(e);
+      alert("Speichern fehlgeschlagen.");
     }
   }
-};
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      'Verfügbar': 'default',
-      'Vermietet': 'secondary',
-      'Wartung': 'destructive',
-      'Leerstand': 'outline'
-    } as const;
-
-    return (
-      <Badge variant={variants[status as keyof typeof variants] || 'default'}>
-        {status}
-      </Badge>
-    );
-  };
-
-  const formatCurrency = (amount: number | undefined) => {
-    if (!amount && amount !== 0) return '-';
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR'
-    }).format(amount!);
-  };
-
-  const rentedCount = useMemo(() => (Array.isArray(immobilien) ? immobilien.filter(i => i.status === 'Vermietet') : []).length, [immobilien]);
-
-  const columns = [
-    {
-      key: 'bezeichnung' as keyof Immobilie,
-      label: 'Bezeichnung',
-      sortable: true,
-      render: (value: string, row: Immobilie) => (
-        <div className="flex items-center space-x-2">
-          <Building2 className="h-4 w-4 text-muted-foreground" />
-          <div>
-            <div className="font-medium">{value}</div>
-            <div className="text-sm text-muted-foreground">{(row as any).art}</div>
-          </div>
-        </div>
-      )
-    },
-    {
-      key: 'adresse' as keyof Immobilie,
-      label: 'Adresse',
-      sortable: true,
-      render: (value: string, row: Immobilie) => (
-        <div className="flex items-center space-x-2">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-          <div>
-            <div>{value}</div>
-            <div className="text-sm text-muted-foreground">{(row as any).plz} {(row as any).ort}</div>
-          </div>
-        </div>
-      )
-    },
-    {
-      key: 'zimmer' as keyof Immobilie,
-      label: 'Zimmer',
-      sortable: true,
-      className: 'text-center'
-    },
-    {
-      key: 'flaeche' as keyof Immobilie,
-      label: 'Fläche (m²)',
-      sortable: true,
-      render: (value: number) => `${value} m²`,
-      className: 'text-right'
-    },
-    {
-      key: 'kaltmiete' as keyof Immobilie,
-      label: 'Kaltmiete',
-      sortable: true,
-      render: (value: number) => formatCurrency(value as any),
-      className: 'text-right'
-    },
-    {
-      key: 'status' as keyof Immobilie,
-      label: 'Status',
-      sortable: true,
-      render: (value: string) => getStatusBadge(value as any)
+  async function onDelete(id: string) {
+    if (!confirm("Wirklich löschen?")) return;
+    try {
+      await immobilienRepo.remove(id);
+      await load();
+    } catch (e) {
+      console.error(e);
+      alert("Löschen fehlgeschlagen.");
     }
-  ];
+  }
+
+  // Parent-Haus-Name anzeigen
+  function renderParentName(r: Immobilie) {
+    if (r.typ === "Wohnung") {
+      if (!r.parent_id) return "– (kein Haus)";
+      const parent = rows.find((h) => h.id === r.parent_id);
+      return parent?.bezeichnung || "—";
+    }
+    return "—"; // Häuser haben keinen Parent
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Page Header */}
+    <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Immobilien</h1>
-          <p className="text-muted-foreground">Verwalten Sie Ihre Immobilienobjekte</p>
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Building2 className="h-4 w-4" />
-            <span>{immobilien.length} Objekte</span>
-          </div>
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Users className="h-4 w-4" />
-            <span>{rentedCount} vermietet</span>
-          </div>
-        </div>
+        <h1 className="text-xl font-semibold">Immobilien</h1>
+        <button
+          className="px-3 py-2 rounded bg-black text-white"
+          onClick={() => setShowDialog(true)}
+        >
+          + Neu
+        </button>
       </div>
 
-      {/* Data Table */}
-      <DataTable
-        title="Alle Immobilien"
-        data={Array.isArray(immobilien) ? immobilien : []}
-        columns={columns as any}
-        searchKeys={['bezeichnung', 'adresse', 'ort', 'status'] as any}
-        onAdd={handleAdd}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        loading={loading}
-        emptyMessage="Keine Immobilien gefunden"
-      />
+      {loading ? (
+        <div>lädt…</div>
+      ) : (
+        <table className="w-full text-sm border rounded">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left p-2">Bezeichnung</th>
+              <th className="text-left p-2">Typ</th>
+              <th className="text-left p-2">Status</th>
+              <th className="text-left p-2">Parent (Haus)</th>
+              <th className="text-left p-2 w-32">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-t">
+                <td className="p-2">{r.bezeichnung}</td>
+                <td className="p-2">{r.typ}</td>
+                <td className="p-2">{r.status || "-"}</td>
+                <td className="p-2">{renderParentName(r)}</td>
+                <td className="p-2">
+                  <button className="text-red-600" onClick={() => onDelete(r.id)}>
+                    Löschen
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td className="p-2 text-gray-500" colSpan={5}>
+                  Keine Immobilien vorhanden.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Immobilie bearbeiten' : 'Neue Immobilie'}</DialogTitle>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField control={form.control} name="bezeichnung" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Bezeichnung</FormLabel>
-                  <FormControl>
-                    <Input placeholder="z. B. Musterstraße 1 – Wohnung 3" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+      {showDialog && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <form
+            onSubmit={onCreate}
+            className="bg-white w-full max-w-md rounded p-4 space-y-3 shadow-lg"
+          >
+            <h2 className="text-lg font-medium">Neue Immobilie</h2>
 
-              <FormField control={form.control} name="adresse" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Adresse</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Straße und Hausnummer" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+            <label className="block">
+              <span className="text-sm">Bezeichnung</span>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={form.bezeichnung || ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, bezeichnung: e.target.value }))
+                }
+                required
+              />
+            </label>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField control={form.control} name="plz" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PLZ</FormLabel>
-                    <FormControl>
-                      <Input placeholder="PLZ" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="ort" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Ort</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ort" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="typ" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Typ</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Typ wählen" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {['Haus','Wohnung'].map(t => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
+            <label className="block">
+              <span className="text-sm">Typ</span>
+              <select
+                className="w-full border rounded px-2 py-1"
+                value={form.typ || "Haus"}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, typ: e.target.value as any }))
+                }
+              >
+                <option>Haus</option>
+                <option>Wohnung</option>
+              </select>
+            </label>
 
-              {form.watch('typ') === 'Wohnung' && (
-                <FormField control={form.control} name="parent_id" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Parent-Haus</FormLabel>
-                    <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Haus wählen" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(haeuser || []).map((h) => (
-                          <SelectItem key={h.id} value={h.id}>{h.bezeichnung}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              )}
+            {isWohnung && (
+              <label className="block">
+                <span className="text-sm">Parent-Haus</span>
+                <select
+                  className="w-full border rounded px-2 py-1"
+                  value={form.parent_id || ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      parent_id: e.target.value || null,
+                    }))
+                  }
+                  required
+                >
+                  <option value="">— bitte wählen —</option>
+                  {hausOptions.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.bezeichnung}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField control={form.control} name="zimmer" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Zimmer</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={1} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="flaeche" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fläche (m²)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step="0.1" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="kaltmiete" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kaltmiete (EUR)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
+            <label className="block">
+              <span className="text-sm">Adresse</span>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={form.adresse || ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, adresse: e.target.value }))
+                }
+                placeholder="Straße Nr, PLZ Ort"
+              />
+            </label>
 
-              <FormField control={form.control} name="status" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Status wählen" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {['Verfügbar','Vermietet','Wartung','Leerstand'].map(s => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
+            <div className="grid grid-cols-3 gap-2">
+              <label className="block">
+                <span className="text-sm">Zimmer</span>
+                <input
+                  type="number"
+                  className="w-full border rounded px-2 py-1"
+                  value={form.zimmer ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, zimmer: Number(e.target.value) }))
+                  }
+                  min={0}
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm">Fläche (qm)</span>
+                <input
+                  type="number"
+                  className="w-full border rounded px-2 py-1"
+                  value={form.flaeche_qm ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      flaeche_qm: Number(e.target.value),
+                    }))
+                  }
+                  min={0}
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm">Kaltmiete (€)</span>
+                <input
+                  type="number"
+                  className="w-full border rounded px-2 py-1"
+                  value={form.kaltmiete ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      kaltmiete: Number(e.target.value),
+                    }))
+                  }
+                  min={0}
+                />
+              </label>
+            </div>
 
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
-                <Button type="submit">{editing ? 'Speichern' : 'Anlegen'}</Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                className="px-3 py-2 rounded border"
+                onClick={() => setShowDialog(false)}
+              >
+                Abbrechen
+              </button>
+              <button type="submit" className="px-3 py-2 rounded bg-black text-white">
+                Speichern
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
-};
-
-export default ImmobilienPage;
+}

@@ -1,107 +1,71 @@
-import { supabase } from '@/integrations/supabase/client';
-import { handleGet, handleList, handleMutation, nowIso, softDelete, friendlyError } from './repoUtils';
+// src/repositories/mieterRepo.ts
+import { vermyDb, nowIso, genId } from '@/db/vermyDb';
 
 export interface MieterListParams {
   search?: string;
   immobilienId?: string;
 }
 
-async function ensureHauptmieterUniqueness(params: { immobilien_id?: string | null; mieterIdToExclude?: string; hauptmieter?: boolean }) {
-  const { immobilien_id, mieterIdToExclude, hauptmieter } = params;
-  if (!hauptmieter || !immobilien_id) return; // Only enforce when setting to true and an immobilie is provided
+const normalize = (r: any) => ({
+  id: r.id,
+  vorname: r.vorname ?? '',
+  nachname: r.nachname ?? '',
+  email: r.email ?? '',
+  telefon: r.telefon ?? '',
+  immobilien_id: r.immobilien_id ?? null,
+  hauptmieter: !!r.hauptmieter,
+  status: r.status ?? 'aktiv',
+  created_at: r.created_at ?? nowIso(),
+  updated_at: r.updated_at ?? nowIso(),
+});
 
-  // Check if immobilie is a Wohnung; only then enforce the uniqueness
-  const { data: immo } = await supabase
-    .from('immobilien')
-    .select('id, typ')
-    .eq('id', immobilien_id)
-    .maybeSingle();
-
-  if (immo?.typ !== 'Wohnung') return;
-
-  let query = supabase
-    .from('mieter')
-    .select('id')
-    .eq('immobilien_id', immobilien_id)
-    .eq('hauptmieter', true)
-    .is('deleted_at', null)
-    .limit(1);
-
-  if (mieterIdToExclude) query = query.neq('id', mieterIdToExclude);
-
-  const { data: existing, error } = await query;
-  if (error) {
-    console.error('mieter.ensureHauptmieterUniqueness error', error);
-    // Fail closed to prevent duplicates
-    throw new Error('Konnte Hauptmieter-Eindeutigkeit nicht prüfen. Bitte später erneut versuchen.');
-  }
-  if (Array.isArray(existing) && existing.length > 0) {
-    throw new Error('Es existiert bereits ein Hauptmieter für diese Wohnung.');
-  }
+export async function ensureHauptmieterUniqueness(immobilien_id?: string | null, excludeId?: string) {
+  if (!immobilien_id) return;
+  const mieter = await vermyDb.mieter.where('immobilien_id').equals(immobilien_id).toArray();
+  const existing = mieter.find(m => m.hauptmieter && m.id !== excludeId);
+  if (existing) throw new Error('Es existiert bereits ein Hauptmieter für diese Wohnung.');
 }
 
 export const mieterRepo = {
   async list(params?: MieterListParams) {
-    let query = supabase.from('mieter').select('*').is('deleted_at', null);
+    let rows = await vermyDb.mieter.orderBy('created_at').reverse().toArray();
 
-    if (params?.immobilienId) query = query.eq('immobilien_id', params.immobilienId);
+    if (params?.immobilienId) rows = rows.filter(r => r.immobilien_id === params.immobilienId);
 
-    const term = (params?.search || '').toString().trim();
+    const term = (params?.search ?? '').trim().toLowerCase();
     if (term) {
-      const like = `%${term}%`;
-      query = query.or(
-        ['vorname', 'nachname', 'email', 'telefon', 'status']
-          .map((f) => `${f}.ilike.${like}`)
-          .join(',')
+      rows = rows.filter(r =>
+        [r.vorname, r.nachname, r.email, r.status]
+          .filter(Boolean)
+          .some(v => String(v).toLowerCase().includes(term))
       );
     }
-
-    const res = await query.order('created_at', { ascending: false });
-    return handleList<any>(res as any, 'mieter');
+    return rows;
   },
 
   async get(id: string) {
-    const res = await supabase.from('mieter').select('*').eq('id', id).maybeSingle();
-    return handleGet<any>(res as any, 'mieter');
+    const row = await vermyDb.mieter.get(id);
+    if (!row) throw new Error('Mieter nicht gefunden');
+    return row;
   },
 
   async create(data: any) {
-    try {
-      await ensureHauptmieterUniqueness({ immobilien_id: data?.immobilien_id, hauptmieter: data?.hauptmieter });
-      const res = await supabase.from('mieter').insert(data as any).select('*').single();
-      return handleMutation<any>(res as any, 'create', 'mieter');
-    } catch (e) {
-      console.error('mieter.create guard error', e);
-      throw new Error(friendlyError('create', 'Mieter'));
-    }
+    const row = normalize({ ...data, id: genId(), created_at: nowIso(), updated_at: nowIso() });
+    if (row.hauptmieter) await ensureHauptmieterUniqueness(row.immobilien_id);
+    await vermyDb.mieter.add(row);
+    return row;
   },
 
   async update(id: string, data: any) {
-    try {
-      const targetImmoId = data?.immobilien_id;
-      if (data?.hauptmieter === true) {
-        let immoId = targetImmoId;
-        if (!immoId) {
-          const current = await supabase.from('mieter').select('immobilien_id').eq('id', id).maybeSingle();
-          immoId = (current.data as any)?.immobilien_id;
-        }
-        await ensureHauptmieterUniqueness({ immobilien_id: immoId, mieterIdToExclude: id, hauptmieter: data?.hauptmieter });
-      }
-
-      const res = await supabase
-        .from('mieter')
-        .update({ ...data, updated_at: nowIso() } as any)
-        .eq('id', id)
-        .select('*')
-        .single();
-      return handleMutation<any>(res as any, 'update', 'mieter');
-    } catch (e) {
-      console.error('mieter.update guard error', e);
-      throw new Error(friendlyError('update', 'Mieter'));
-    }
+    const prev = await vermyDb.mieter.get(id);
+    if (!prev) throw new Error('Mieter nicht gefunden');
+    const next = normalize({ ...prev, ...data, updated_at: nowIso() });
+    if (next.hauptmieter) await ensureHauptmieterUniqueness(next.immobilien_id, id);
+    await vermyDb.mieter.put(next);
+    return next;
   },
 
   async remove(id: string) {
-    await softDelete('mieter', id);
+    await vermyDb.mieter.delete(id);
   },
 };

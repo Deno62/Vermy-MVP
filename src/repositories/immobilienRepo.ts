@@ -1,5 +1,5 @@
-import { supabase } from '@/integrations/supabase/client';
-import { handleGet, handleList, handleMutation, nowIso, softDelete } from './repoUtils';
+// src/repositories/immobilienRepo.ts
+import { vermyDb, nowIso, genId } from '@/db/vermyDb';
 
 export type ImmobilieTyp = 'Haus' | 'Wohnung';
 
@@ -9,69 +9,75 @@ export interface ImmobilienListParams {
   parentId?: string | null;
 }
 
+const normalize = (r: any) => ({
+  id: r.id,
+  bezeichnung: r.bezeichnung ?? '',
+  adresse: r.adresse ?? '',
+  ort: r.ort ?? '',
+  plz: r.plz ?? '',
+  typ: (r.typ ?? 'Wohnung') as ImmobilieTyp,
+  zimmer: Number(r.zimmer ?? 0),
+  flaeche_qm: Number(r.flaeche_qm ?? 0),
+  kaltmiete: Number(r.kaltmiete ?? 0),
+  status: r.status ?? 'frei',
+  parent_id: r.parent_id ?? null,
+  notizen: r.notizen ?? '',
+  created_at: r.created_at ?? nowIso(),
+  updated_at: r.updated_at ?? nowIso(),
+});
+
 export const immobilienRepo = {
   async list(params?: ImmobilienListParams) {
-    let query = supabase.from('immobilien').select('*').is('deleted_at', null);
+    let coll = vermyDb.immobilien.orderBy('created_at').reverse();
+    let rows = await coll.toArray();
 
-    if (params?.typ) query = query.eq('typ', params.typ);
+    if (params?.typ) rows = rows.filter(r => r.typ === params.typ);
     if (params?.parentId !== undefined) {
-      if (params.parentId === null) query = query.is('parent_id', null);
-      else query = query.eq('parent_id', params.parentId);
-    }
-
-    const term = (params?.search || '').toString().trim();
-    if (term) {
-      const like = `%${term}%`;
-      query = query.or(
-        ['bezeichnung', 'adresse', 'ort', 'art', 'status']
-          .map((f) => `${f}.ilike.${like}`)
-          .join(',')
+      rows = rows.filter(r =>
+        params.parentId === null ? r.parent_id == null : r.parent_id === params.parentId
       );
     }
-
-    const res = await query.order('created_at', { ascending: false });
-    return handleList<any>(res as any, 'immobilien');
+    const term = (params?.search ?? '').trim().toLowerCase();
+    if (term) {
+      rows = rows.filter(r =>
+        [r.bezeichnung, r.adresse, r.ort, r.status]
+          .filter(Boolean)
+          .some(v => String(v).toLowerCase().includes(term))
+      );
+    }
+    return rows;
   },
 
   async listHaeuser() {
-    const res = await supabase
-      .from('immobilien')
-      .select('*')
-      .eq('typ', 'Haus')
-      .is('parent_id', null)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    return handleList<any>(res as any, 'immobilien');
+    return vermyDb.immobilien.where({ typ: 'Haus', parent_id: null }).reverse().sortBy('created_at');
   },
 
   async listWohnungenByHaus(houseId: string) {
-    const res = await supabase
-      .from('immobilien')
-      .select('*')
-      .eq('parent_id', houseId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    return handleList<any>(res as any, 'immobilien');
+    return vermyDb.immobilien.where('parent_id').equals(houseId).reverse().sortBy('created_at');
   },
 
   async get(id: string) {
-    const res = await supabase.from('immobilien').select('*').eq('id', id).maybeSingle();
-    return handleGet<any>(res as any, 'immobilien');
+    const row = await vermyDb.immobilien.get(id);
+    if (!row) throw new Error('Immobilie nicht gefunden');
+    return row;
   },
 
   async create(data: any) {
-    const payload = { ...data } as any;
-    const res = await supabase.from('immobilien').insert(payload).select('*').single();
-    return handleMutation<any>(res as any, 'create', 'immobilien');
+    const row = normalize({ ...data, id: genId(), created_at: nowIso(), updated_at: nowIso() });
+    if (row.typ === 'Haus') row.parent_id = null;
+    await vermyDb.immobilien.add(row);
+    return row;
   },
 
   async update(id: string, data: any) {
-    const payload = { ...data, updated_at: nowIso() } as any;
-    const res = await supabase.from('immobilien').update(payload).eq('id', id).select('*').single();
-    return handleMutation<any>(res as any, 'update', 'immobilien');
+    const prev = await vermyDb.immobilien.get(id);
+    if (!prev) throw new Error('Immobilie nicht gefunden');
+    const next = normalize({ ...prev, ...data, updated_at: nowIso() });
+    await vermyDb.immobilien.put(next);
+    return next;
   },
 
   async remove(id: string) {
-    await softDelete('immobilien', id);
+    await vermyDb.immobilien.delete(id);
   },
 };

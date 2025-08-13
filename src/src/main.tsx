@@ -1,4 +1,4 @@
-// src/main.tsx — CLEAN VERSION (no seedIfEmpty!)
+// src/main.tsx  (Router NUR hier!)
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

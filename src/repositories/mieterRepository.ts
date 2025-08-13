@@ -1,53 +1,65 @@
-import { supabase } from '@/integrations/supabase/client';
+import { vermyDb } from '@/db/vermyDb';
 import type { Mieter } from '@/types/entities';
-import type { Repository, ListParams } from './baseRepository';
 
-const SEARCH_FIELDS: (keyof Mieter)[] = ['vorname', 'nachname', 'email', 'telefon', 'status'];
+export async function listMieter(opts?: { search?: string; immobilieId?: string }) {
+  let coll = vermyDb.mieter.toCollection();
 
-export const mieterRepository: Repository<Mieter> = {
-  async list(params?: ListParams<Mieter>) {
-    let query = supabase.from('mieter').select('*').is('deleted_at', null);
+  if (opts?.immobilieId) {
+    coll = coll.filter(m => m.immobilie_id === opts.immobilieId);
+  }
+  if (opts?.search) {
+    const s = opts.search.toLowerCase();
+    coll = coll.filter(m =>
+      (m.vorname ?? '').toLowerCase().includes(s) ||
+      (m.nachname ?? '').toLowerCase().includes(s) ||
+      (m.email ?? '').toLowerCase().includes(s) ||
+      (m.telefon ?? '').toLowerCase().includes(s)
+    );
+  }
 
-    if (params?.filters) {
-      for (const [k, v] of Object.entries(params.filters)) {
-        if (v != null && v !== '') query = query.eq(k, v as any);
-      }
-    }
+  return coll.reverse().toArray();
+}
 
-    const term = (params?.search || '').toString().trim();
-    if (term) {
-      const like = `%${term}%`;
-      query = query.or(SEARCH_FIELDS.map((f) => `${String(f)}.ilike.${like}`).join(','));
-    }
+export async function getMieter(id: string) {
+  return vermyDb.mieter.get(id);
+}
 
-    const { data, error } = await query.order('created_at', { ascending: false });
-    if (error) {
-      console.error('mieter.list error', error);
-      return [];
-    }
-    return (data as any[]) as Mieter[];
-  },
+export async function createMieter(data: Partial<Mieter>) {
+  const id = crypto.randomUUID();
+  const now = new Date();
 
-  async get(id: string) {
-    const { data, error } = await supabase.from('mieter').select('*').eq('id', id).maybeSingle();
-    if (error) return null;
-    return data as any as Mieter;
-  },
+  const rec: Mieter = {
+    id,
+    version: 1,
+    created_at: now,
+    updated_at: now,
+    vorname: data.vorname ?? '',
+    nachname: data.nachname ?? '',
+    email: data.email ?? '',
+    telefon: data.telefon ?? '',
+    adresse: data.adresse,
+    status: data.status ?? 'aktiv',
+    immobilie_id: data.immobilie_id, // set when linking to Wohnung
+    notizen: data.notizen,
+  };
 
-  async create(data) {
-    const { data: row, error } = await supabase.from('mieter').insert(data as any).select('*').single();
-    if (error) throw error;
-    return row as any as Mieter;
-  },
+  await vermyDb.mieter.add(rec);
+  return rec;
+}
 
-  async update(id, data) {
-    const { data: row, error } = await supabase.from('mieter').update({ ...data, updated_at: new Date().toISOString() } as any).eq('id', id).select('*').single();
-    if (error) throw error;
-    return row as any as Mieter;
-  },
+export async function updateMieter(id: string, patch: Partial<Mieter>) {
+  const cur = await vermyDb.mieter.get(id);
+  if (!cur) throw new Error('Nicht gefunden');
+  const merged: Mieter = { ...cur, ...patch, updated_at: new Date() };
+  await vermyDb.mieter.put(merged);
+  return merged;
+}
 
-  async remove(id) {
-    const { error } = await supabase.from('mieter').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-    if (error) throw error;
-  },
-};
+export async function deleteMieter(id: string) {
+  await vermyDb.mieter.delete(id);
+  return true;
+}
+
+export async function listMieterByWohnung(wohnungId: string) {
+  return vermyDb.mieter.where('immobilie_id').equals(wohnungId).reverse().toArray();
+}

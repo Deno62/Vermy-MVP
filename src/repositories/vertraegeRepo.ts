@@ -1,55 +1,95 @@
-import { supabase } from '@/integrations/supabase/client';
-import { handleGet, handleList, handleMutation, nowIso, softDelete } from './repoUtils';
+import { vermyDb } from '@/db/vermyDb';
+import type { Vertrag } from '@/types/entities';
 
 export interface VertraegeListParams {
   search?: string;
   status?: string;
 }
 
-// Mapper between public API and DB columns
+// Mapper zwischen API-Feldern und DB-Feldern (lokal)
 function toDbPayload(input: any) {
   const { beginn, ende, ...rest } = input || {};
   return {
     ...rest,
     mietbeginn: beginn ?? input?.mietbeginn,
     mietende: ende ?? input?.mietende,
-  } as any;
+  } as Partial<Vertrag> & Record<string, any>;
 }
 
 export const vertraegeRepo = {
   async list(params?: VertraegeListParams) {
-    let query = supabase.from('vertraege').select('*').is('deleted_at', null);
+    let coll = vermyDb.vertraege
+      .toCollection()
+      .filter((v: any) => !v.deleted_at);
 
-    if (params?.status) query = query.eq('status', params.status);
-
-    const term = (params?.search || '').toString().trim();
-    if (term) {
-      const like = `%${term}%`;
-      query = query.or(['mietvertrags_id.ilike.' + like].join(','));
+    if (params?.status) {
+      coll = coll.filter((v: any) => v.status === params.status);
     }
 
-    const res = await query.order('created_at', { ascending: false });
-    return handleList<any>(res as any, 'vertraege');
+    const term = (params?.search || '').toString().trim().toLowerCase();
+    if (term) {
+      coll = coll.filter((v: any) =>
+        (v.mietvertrags_id ?? '').toLowerCase().includes(term)
+      );
+    }
+
+    return coll.reverse().toArray();
   },
 
   async get(id: string) {
-    const res = await supabase.from('vertraege').select('*').eq('id', id).maybeSingle();
-    return handleGet<any>(res as any, 'vertraege');
+    const v = await vermyDb.vertraege.get(id);
+    if (!v || (v as any).deleted_at) return null;
+    return v;
   },
 
   async create(data: any) {
-    const payload = toDbPayload(data);
-    const res = await supabase.from('vertraege').insert(payload as any).select('*').single();
-    return handleMutation<any>(res as any, 'create', 'vertraege');
+    try {
+      const payload = toDbPayload(data);
+      const rec: Vertrag = {
+        id: crypto.randomUUID(),
+        version: 1,
+        created_at: new Date(),
+        updated_at: new Date(),
+        mietvertrags_id: payload.mietvertrags_id ?? '',
+        mietbeginn: payload.mietbeginn,
+        mietende: payload.mietende,
+        status: payload.status ?? 'aktiv',
+        // beliebige weitere Felder aus payload
+        ...(payload as any),
+      } as any;
+
+      await vermyDb.vertraege.add(rec);
+      return rec;
+    } catch (e) {
+      console.error('vertraege.create error', e);
+      throw new Error('Vertrag konnte nicht angelegt werden.');
+    }
   },
 
   async update(id: string, data: any) {
-    const payload = toDbPayload({ ...data, updated_at: nowIso() });
-    const res = await supabase.from('vertraege').update(payload as any).eq('id', id).select('*').single();
-    return handleMutation<any>(res as any, 'update', 'vertraege');
+    try {
+      const current = await vermyDb.vertraege.get(id);
+      if (!current) throw new Error('Nicht gefunden');
+
+      const payload = toDbPayload(data);
+      const merged: any = {
+        ...current,
+        ...payload,
+        updated_at: new Date(),
+      };
+
+      await vermyDb.vertraege.put(merged);
+      return merged;
+    } catch (e) {
+      console.error('vertraege.update error', e);
+      throw new Error('Vertrag konnte nicht aktualisiert werden.');
+    }
   },
 
   async remove(id: string) {
-    await softDelete('vertraege', id);
+    const cur: any = await vermyDb.vertraege.get(id);
+    if (!cur) return;
+    cur.deleted_at = new Date().toISOString();
+    await vermyDb.vertraege.put(cur);
   },
 };
