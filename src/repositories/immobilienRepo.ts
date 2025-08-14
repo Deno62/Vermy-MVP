@@ -1,12 +1,13 @@
 // src/repositories/immobilienRepo.ts
-import { vermyDb, nowIso, genId } from '@/db/vermyDb';
+import { db, nowIso, genId } from '@/db/vermyDb';
 
 export type ImmobilieTyp = 'Haus' | 'Wohnung';
 
 export interface ImmobilienListParams {
-  search?: string;
+  q?: string;
   typ?: ImmobilieTyp;
   parentId?: string | null;
+  status?: string;
 }
 
 const normalize = (r: any) => ({
@@ -28,36 +29,36 @@ const normalize = (r: any) => ({
 
 export const immobilienRepo = {
   async list(params?: ImmobilienListParams) {
-    let coll = vermyDb.immobilien.orderBy('created_at').reverse();
-    let rows = await coll.toArray();
+      let rows = await db.immobilien.orderBy('created_at').reverse().toArray();
 
-    if (params?.typ) rows = rows.filter(r => r.typ === params.typ);
-    if (params?.parentId !== undefined) {
-      rows = rows.filter(r =>
-        params.parentId === null ? r.parent_id == null : r.parent_id === params.parentId
-      );
-    }
-    const term = (params?.search ?? '').trim().toLowerCase();
-    if (term) {
-      rows = rows.filter(r =>
-        [r.bezeichnung, r.adresse, r.ort, r.status]
-          .filter(Boolean)
-          .some(v => String(v).toLowerCase().includes(term))
-      );
-    }
-    return rows;
+      if (params?.typ) rows = rows.filter(r => r.typ === params.typ);
+      if (params?.parentId !== undefined) {
+        rows = rows.filter(r =>
+          params.parentId === null ? r.parent_id == null : r.parent_id === params.parentId
+        );
+      }
+      if (params?.status) rows = rows.filter(r => r.status === params.status);
+      const term = (params?.q ?? '').trim().toLowerCase();
+      if (term) {
+        rows = rows.filter(r =>
+          [r.bezeichnung, r.notizen, r.status]
+            .filter(Boolean)
+            .some(v => String(v).toLowerCase().includes(term))
+        );
+      }
+      return rows;
   },
 
   async listHaeuser() {
-    return vermyDb.immobilien.where({ typ: 'Haus', parent_id: null }).reverse().sortBy('created_at');
+      return db.immobilien.where({ typ: 'Haus', parent_id: null }).reverse().sortBy('created_at');
   },
 
   async listWohnungenByHaus(houseId: string) {
-    return vermyDb.immobilien.where('parent_id').equals(houseId).reverse().sortBy('created_at');
+      return db.immobilien.where('parent_id').equals(houseId).reverse().sortBy('created_at');
   },
 
   async get(id: string) {
-    const row = await vermyDb.immobilien.get(id);
+      const row = await db.immobilien.get(id);
     if (!row) throw new Error('Immobilie nicht gefunden');
     return row;
   },
@@ -65,19 +66,29 @@ export const immobilienRepo = {
   async create(data: any) {
     const row = normalize({ ...data, id: genId(), created_at: nowIso(), updated_at: nowIso() });
     if (row.typ === 'Haus') row.parent_id = null;
-    await vermyDb.immobilien.add(row);
+      await db.immobilien.add(row);
     return row;
   },
 
   async update(id: string, data: any) {
-    const prev = await vermyDb.immobilien.get(id);
+      const prev = await db.immobilien.get(id);
     if (!prev) throw new Error('Immobilie nicht gefunden');
     const next = normalize({ ...prev, ...data, updated_at: nowIso() });
-    await vermyDb.immobilien.put(next);
+      await db.immobilien.put(next);
     return next;
   },
 
   async remove(id: string) {
-    await vermyDb.immobilien.delete(id);
-  },
-};
+      const row = await db.immobilien.get(id);
+      if (!row) return;
+      if (row.typ === 'Haus') {
+        const count = await db.immobilien.where('parent_id').equals(id).count();
+        if (count > 0) throw new Error('Haus kann nicht gelöscht werden, solange Wohnungen existieren.');
+      }
+      if (row.typ === 'Wohnung') {
+        const count = await db.mieter.where('immobilie_id').equals(id).count();
+        if (count > 0) throw new Error('Wohnung kann nicht gelöscht werden, solange Mieter existieren.');
+      }
+      await db.immobilien.delete(id);
+    },
+  };

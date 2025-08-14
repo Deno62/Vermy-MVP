@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import DataTable from '@/components/common/DataTable';
 import { Nebenkosten, Immobilie } from '@/types/entities';
-import { LocalStorage, STORAGE_KEYS } from '@/utils/storage';
+import { immobilienRepo } from '@/repositories/immobilienRepo';
+import { nebenkostenRepo } from '@/repositories/nebenkostenRepo';
 import { Receipt, Building2, Calendar } from 'lucide-react';
 
 const NebenkostenPage = () => {
@@ -15,11 +16,12 @@ const NebenkostenPage = () => {
   }, []);
 
   const loadData = async () => {
-    const immobilienData = await LocalStorage.getAll<Immobilie>(STORAGE_KEYS.IMMOBILIEN);
-    setImmobilien(immobilienData);
-    
-    const nebenkostenData = await LocalStorage.getAll<Nebenkosten>(STORAGE_KEYS.NEBENKOSTEN);
-    setNebenkosten(nebenkostenData);
+      const [immobilienData, nebenkostenData] = await Promise.all([
+        immobilienRepo.list(),
+        nebenkostenRepo.list(),
+      ]);
+      setImmobilien(immobilienData);
+      setNebenkosten(nebenkostenData);
     setLoading(false);
   };
 
@@ -33,7 +35,7 @@ const NebenkostenPage = () => {
 
   const handleDelete = async (item: Nebenkosten) => {
     if (confirm(`Möchten Sie die Nebenkostenabrechnung für ${item.jahr} wirklich löschen?`)) {
-      await LocalStorage.delete(STORAGE_KEYS.NEBENKOSTEN, item.id);
+        await nebenkostenRepo.remove(item.id);
       loadData();
     }
   };

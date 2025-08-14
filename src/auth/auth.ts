@@ -1,5 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
-
 export type AuthUser = {
   email: string;
   name: string;
@@ -26,49 +24,27 @@ export function getUser(): AuthUser | null {
 
 export async function login(email: string, password: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error || !data.session) {
-      return { ok: false, error: error?.message || 'Ungültige Zugangsdaten' };
+    if (email === seededCredentials.email && password === seededCredentials.password) {
+      const name = email.split('@')[0];
+      const user: AuthUser = { email, name };
+      window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+      return { ok: true };
     }
-    const name = email.split('@')[0];
-    const user: AuthUser = { email, name };
-    window.localStorage.setItem(USER_KEY, JSON.stringify(user));
-    return { ok: true };
+    return { ok: false, error: 'Ungültige Zugangsdaten' };
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Login fehlgeschlagen' };
   }
 }
 
-export async function signUp(email: string, password: string): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const redirectUrl = `${window.location.origin}/login`;
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: redirectUrl },
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'Registrierung fehlgeschlagen' };
-  }
+export async function signUp(_email: string, _password: string): Promise<{ ok: boolean; error?: string }> {
+  return { ok: false, error: 'Registrierung im Offline-Modus nicht verfügbar' };
 }
 
-export async function resetPassword(email: string): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const redirectUrl = `${window.location.origin}/login`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'Passwort-Zurücksetzen fehlgeschlagen' };
-  }
+export async function resetPassword(_email: string): Promise<{ ok: boolean; error?: string }> {
+  return { ok: false, error: 'Passwort-Zurücksetzen im Offline-Modus nicht verfügbar' };
 }
 
 export async function logout() {
-  try {
-    await supabase.auth.signOut();
-  } catch {}
   try {
     window.localStorage.removeItem(USER_KEY);
   } catch {}
