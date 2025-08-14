@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import DataTable from '@/components/common/DataTable';
 import { Finanzbuchung, Immobilie } from '@/types/entities';
 import { Euro, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
-import { zahlungRepository } from '@/repositories/zahlungRepository';
+import { finanzenRepo } from '@/repositories/finanzenRepo';
 import { immobilienRepo } from '@/repositories/immobilienRepo';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -44,7 +44,7 @@ const FinanzenPage = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const [immos, data] = await Promise.all([immobilienRepo.list(), zahlungRepository.list()]);
+      const [immos, data] = await Promise.all([immobilienRepo.list(), finanzenRepo.list()]);
     setImmobilien(immos);
     setBuchungen(data);
     setLoading(false);
@@ -72,9 +72,9 @@ const FinanzenPage = () => {
 
   const onSubmit = async (values: FormValues) => {
     if (editing) {
-      await zahlungRepository.update(editing.id, { ...values, updated_at: new Date() } as any);
+        await finanzenRepo.update(editing.id, { ...values, updated_at: new Date() } as any);
     } else {
-      await zahlungRepository.create(values as any);
+        await finanzenRepo.create(values as any);
     }
     setOpen(false);
     setEditing(null);
@@ -83,7 +83,7 @@ const FinanzenPage = () => {
 
   const handleDelete = async (b: Finanzbuchung) => {
     if (confirm(`Möchten Sie die Buchung "${(b as any).beschreibung}" wirklich löschen?`)) {
-      await zahlungRepository.remove(b.id);
+        await finanzenRepo.remove(b.id);
       loadData();
     }
   };
