@@ -38,7 +38,8 @@ class VermyDatabase extends Dexie {
   }
 }
 
-export const vermyDb = new VermyDatabase();
+export const db = new VermyDatabase();
+export const vermyDb = db;
 
 export const nowIso = () => new Date().toISOString();
 
