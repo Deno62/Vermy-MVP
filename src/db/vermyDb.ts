@@ -1,6 +1,18 @@
 import Dexie, { Table } from 'dexie';
 import type { Immobilie, Mieter, Finanzbuchung, Nebenkosten, WartungMaengel, Mahnwesen, Dokument, Vertrag } from '@/types/entities';
 
+export type UUID = string;
+export type ImmobilieTyp = 'Haus' | 'Wohnung';
+export type VertragStatus = 'aktiv' | 'gekündigt' | 'beendet';
+export type ZahlungStatus = 'Bezahlt' | 'Offen' | 'Überfällig';
+
+export interface Adresse {
+  strasse: string;
+  hausnummer: string;
+  plz: string;
+  ort: string;
+}
+
 class VermyDatabase extends Dexie {
   immobilien!: Table<Immobilie, string>;
   mieter!: Table<Mieter, string>;

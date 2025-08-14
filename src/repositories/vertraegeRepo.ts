@@ -1,4 +1,4 @@
-import { vermyDb } from '@/db/vermyDb';
+import { db as vermyDb } from '@/db/vermyDb';
 import type { Vertrag } from '@/types/entities';
 
 export interface VertraegeListParams {
@@ -87,9 +87,11 @@ export const vertraegeRepo = {
   },
 
   async remove(id: string) {
-    const cur: any = await vermyDb.vertraege.get(id);
-    if (!cur) return;
-    cur.deleted_at = new Date().toISOString();
-    await vermyDb.vertraege.put(cur);
-  },
-};
+      const cur: any = await vermyDb.vertraege.get(id);
+      if (!cur) return;
+      const count = await vermyDb.finanzbuchungen.where('vertrag_id').equals(id).count();
+      if (count > 0) throw new Error('Vertrag ist mit Zahlungen verknüpft und kann nicht gelöscht werden.');
+      cur.deleted_at = new Date().toISOString();
+      await vermyDb.vertraege.put(cur);
+    },
+  };
